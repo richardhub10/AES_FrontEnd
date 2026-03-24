@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Button,
   FlatList,
+  Platform,
   SafeAreaView,
   StyleSheet,
   Text,
@@ -28,10 +29,14 @@ export default function App() {
   const [busy, setBusy] = useState(false);
 
   const [appointments, setAppointments] = useState([]);
-  const [doctorName, setDoctorName] = useState('');
-  const [scheduledForIso, setScheduledForIso] = useState('2030-01-01T10:00:00Z');
+  const [scheduledForLocal, setScheduledForLocal] = useState('2030-01-01T10:00');
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
+
+  const scheduledForIso = useMemo(() => {
+    const d = parseDatetimeLocal(scheduledForLocal);
+    return d ? d.toISOString() : '';
+  }, [scheduledForLocal]);
 
   const api = useMemo(() => {
     const instance = axios.create({
@@ -125,12 +130,10 @@ export default function App() {
     setError('');
     try {
       await api.post('/api/appointments/', {
-        doctor_name: doctorName,
         scheduled_for: scheduledForIso,
         reason,
         notes,
       });
-      setDoctorName('');
       setReason('');
       setNotes('');
       await fetchAppointments();
@@ -230,18 +233,22 @@ export default function App() {
             </Text>
 
             <Text style={styles.sectionTitle}>Create Appointment</Text>
-            <Text style={styles.label}>Doctor Name</Text>
-            <TextInput value={doctorName} onChangeText={setDoctorName} style={styles.input} />
 
-            <Text style={styles.label}>Scheduled For (ISO)</Text>
+            <Text style={styles.label}>Scheduled For</Text>
             <TextInput
-              value={scheduledForIso}
-              onChangeText={setScheduledForIso}
+              value={scheduledForLocal}
+              onChangeText={setScheduledForLocal}
               autoCapitalize="none"
               style={styles.input}
-              placeholder="2030-01-01T10:00:00Z"
+              placeholder="2030-01-01T10:00"
+              // react-native-web forwards unknown props to the underlying <input>
+              {...(Platform.OS === 'web' ? { type: 'datetime-local' } : null)}
             />
-            <Text style={styles.hint}>Example: 2030-01-01T10:00:00Z</Text>
+            <Text style={styles.hint}>
+              {Platform.OS === 'web'
+                ? 'Use the calendar/time picker.'
+                : 'Format: YYYY-MM-DDTHH:mm (e.g. 2030-01-01T10:00)'}
+            </Text>
 
             <Text style={styles.label}>Reason</Text>
             <TextInput value={reason} onChangeText={setReason} style={styles.input} />
@@ -252,7 +259,7 @@ export default function App() {
             <Button
               title="Create"
               onPress={createAppointment}
-              disabled={busy || !doctorName || !scheduledForIso}
+              disabled={busy || !scheduledForIso}
             />
           </View>
 
@@ -265,7 +272,7 @@ export default function App() {
               renderItem={({ item }) => (
                 <View style={styles.item}>
                   <Text style={styles.itemTitle}>
-                    {item.doctor_name} • {item.status}
+                    {item.status}
                   </Text>
                   <Text style={styles.itemMeta}>{item.scheduled_for}</Text>
                   {!!item.reason && <Text style={styles.itemBody}>Reason: {item.reason}</Text>}
@@ -322,6 +329,14 @@ function getErrorMessage(e) {
     return JSON.stringify(e.response.data);
   }
   return e?.message || 'Request failed';
+}
+
+function parseDatetimeLocal(value) {
+  // Accepts `YYYY-MM-DDTHH:mm` (from <input type="datetime-local">)
+  if (!value || typeof value !== 'string') return null;
+  const ms = Date.parse(value);
+  if (Number.isNaN(ms)) return null;
+  return new Date(ms);
 }
 
 const styles = StyleSheet.create({
