@@ -36,7 +36,7 @@ export default function App() {
   const api = useMemo(() => {
     const instance = axios.create({
       baseURL: API_BASE_URL,
-      timeout: 15000,
+      timeout: 60000,
     });
 
     instance.interceptors.request.use((config) => {
@@ -307,6 +307,16 @@ export default function App() {
 }
 
 function getErrorMessage(e) {
+  // Axios timeout errors (common with Render free-tier cold starts)
+  if (e?.code === 'ECONNABORTED' || String(e?.message || '').toLowerCase().includes('timeout')) {
+    return 'Backend did not respond in time. If the backend is on Render, wait 30–60 seconds and try again.';
+  }
+
+  // Browser network errors (DNS/CORS/offline)
+  if (!e?.response && String(e?.message || '').toLowerCase().includes('network')) {
+    return 'Network error contacting the backend. Check your connection and that the backend URL is correct.';
+  }
+
   if (e?.response?.data) {
     if (typeof e.response.data === 'string') return e.response.data;
     return JSON.stringify(e.response.data);
