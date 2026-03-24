@@ -130,6 +130,8 @@ export default function App() {
     setError('');
     try {
       await api.post('/api/appointments/', {
+        // Backend still expects this field; keep it out of the UI.
+        doctor_name: 'General',
         scheduled_for: scheduledForIso,
         reason,
         notes,
