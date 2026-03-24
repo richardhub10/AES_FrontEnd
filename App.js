@@ -11,8 +11,11 @@ import {
   View,
 } from 'react-native';
 
+const API_BASE_URL =
+  (typeof process !== 'undefined' && process?.env?.EXPO_PUBLIC_API_BASE_URL) ||
+  'https://aes-back.onrender.com';
+
 export default function App() {
-  const [apiBaseUrl, setApiBaseUrl] = useState('http://10.0.2.2:8000');
   const [mode, setMode] = useState('login'); // 'login' | 'register'
 
   const [username, setUsername] = useState('');
@@ -32,7 +35,7 @@ export default function App() {
 
   const api = useMemo(() => {
     const instance = axios.create({
-      baseURL: apiBaseUrl,
+      baseURL: API_BASE_URL,
       timeout: 15000,
     });
 
@@ -44,7 +47,7 @@ export default function App() {
     });
 
     return instance;
-  }, [apiBaseUrl, token]);
+  }, [token]);
 
   async function onRegister() {
     setBusy(true);
@@ -154,23 +157,6 @@ export default function App() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>UA Clinic Appointment System</Text>
-        <Text style={styles.subtitle}>
-          Backend stores reason/notes encrypted with AES-GCM.
-        </Text>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.label}>API Base URL</Text>
-        <TextInput
-          value={apiBaseUrl}
-          onChangeText={setApiBaseUrl}
-          autoCapitalize="none"
-          style={styles.input}
-          placeholder="http://10.0.2.2:8000"
-        />
-        <Text style={styles.hint}>
-          Android emulator: 10.0.2.2 • Web/iOS: localhost • Physical device: your PC LAN IP
-        </Text>
       </View>
 
       {!!error && (

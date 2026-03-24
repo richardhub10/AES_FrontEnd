@@ -8,4 +8,5 @@ Settings:
 
 Notes:
 - This uses Expo web export (`expo export -p web`).
-- Your app talks to the backend via the **API Base URL** field in the app UI.
+- The backend URL is fixed in code. To change it for a deployment, set a Render environment variable:
+	- `EXPO_PUBLIC_API_BASE_URL` (example: `https://your-backend.onrender.com`)
