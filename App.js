@@ -5,6 +5,7 @@ import {
   Button,
   FlatList,
   Platform,
+  Pressable,
   SafeAreaView,
   StyleSheet,
   Text,
@@ -29,14 +30,54 @@ export default function App() {
   const [busy, setBusy] = useState(false);
 
   const [appointments, setAppointments] = useState([]);
-  const [scheduledForLocal, setScheduledForLocal] = useState('2030-01-01T10:00');
+  const DAILY_CAPACITY = Number(
+    (typeof process !== 'undefined' && process?.env?.EXPO_PUBLIC_DAILY_CAPACITY) ||
+      10,
+  );
+
+  const [calendarCursor, setCalendarCursor] = useState(() => {
+    const d = new Date();
+    d.setUTCDate(1);
+    d.setUTCHours(0, 0, 0, 0);
+    return d;
+  });
+
+  const [selectedDateYmd, setSelectedDateYmd] = useState(() => {
+    return new Date().toISOString().slice(0, 10);
+  });
+  const [selectedTime, setSelectedTime] = useState('10:00');
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
 
   const scheduledForIso = useMemo(() => {
-    const d = parseDatetimeLocal(scheduledForLocal);
-    return d ? d.toISOString() : '';
-  }, [scheduledForLocal]);
+    if (!selectedDateYmd || !selectedTime) return '';
+    // Treat user-selected time as UTC to match backend timezone (UTC).
+    const d = new Date(`${selectedDateYmd}T${selectedTime}:00Z`);
+    return Number.isNaN(d.getTime()) ? '' : d.toISOString();
+  }, [selectedDateYmd, selectedTime]);
+
+  const bookedCountByDate = useMemo(() => {
+    const map = new Map();
+    for (const appt of appointments || []) {
+      const ymd = typeof appt?.scheduled_for === 'string' ? appt.scheduled_for.slice(0, 10) : '';
+      if (!ymd) continue;
+      map.set(ymd, (map.get(ymd) || 0) + 1);
+    }
+    return map;
+  }, [appointments]);
+
+  const earliestAvailableYmd = useMemo(() => {
+    const start = new Date();
+    start.setUTCHours(0, 0, 0, 0);
+    for (let i = 0; i < 366; i++) {
+      const d = new Date(start);
+      d.setUTCDate(start.getUTCDate() + i);
+      const ymd = d.toISOString().slice(0, 10);
+      const count = bookedCountByDate.get(ymd) || 0;
+      if (count < DAILY_CAPACITY) return ymd;
+    }
+    return '';
+  }, [bookedCountByDate, DAILY_CAPACITY]);
 
   const api = useMemo(() => {
     const instance = axios.create({
@@ -237,20 +278,29 @@ export default function App() {
             <Text style={styles.sectionTitle}>Create Appointment</Text>
 
             <Text style={styles.label}>Scheduled For</Text>
+            {!!earliestAvailableYmd && (
+              <Text style={styles.hint}>Earliest available appointment: {earliestAvailableYmd}</Text>
+            )}
+
+            <Calendar
+              cursor={calendarCursor}
+              onChangeCursor={setCalendarCursor}
+              selectedDateYmd={selectedDateYmd}
+              onSelectDateYmd={setSelectedDateYmd}
+              bookedCountByDate={bookedCountByDate}
+              dailyCapacity={DAILY_CAPACITY}
+            />
+
+            <Text style={styles.label}>Time (UTC)</Text>
             <TextInput
-              value={scheduledForLocal}
-              onChangeText={setScheduledForLocal}
+              value={selectedTime}
+              onChangeText={setSelectedTime}
               autoCapitalize="none"
               style={styles.input}
-              placeholder="2030-01-01T10:00"
-              // react-native-web forwards unknown props to the underlying <input>
-              {...(Platform.OS === 'web' ? { type: 'datetime-local' } : null)}
+              placeholder="10:00"
+              {...(Platform.OS === 'web' ? { type: 'time' } : null)}
             />
-            <Text style={styles.hint}>
-              {Platform.OS === 'web'
-                ? 'Use the calendar/time picker.'
-                : 'Format: YYYY-MM-DDTHH:mm (e.g. 2030-01-01T10:00)'}
-            </Text>
+            <Text style={styles.hint}>Selected: {selectedDateYmd} {selectedTime}</Text>
 
             <Text style={styles.label}>Reason</Text>
             <TextInput value={reason} onChangeText={setReason} style={styles.input} />
@@ -333,12 +383,121 @@ function getErrorMessage(e) {
   return e?.message || 'Request failed';
 }
 
-function parseDatetimeLocal(value) {
-  // Accepts `YYYY-MM-DDTHH:mm` (from <input type="datetime-local">)
-  if (!value || typeof value !== 'string') return null;
-  const ms = Date.parse(value);
-  if (Number.isNaN(ms)) return null;
-  return new Date(ms);
+function Calendar({
+  cursor,
+  onChangeCursor,
+  selectedDateYmd,
+  onSelectDateYmd,
+  bookedCountByDate,
+  dailyCapacity,
+}) {
+  const year = cursor.getUTCFullYear();
+  const month = cursor.getUTCMonth(); // 0-11
+
+  const monthName = cursor.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+
+  const weeks = useMemo(() => buildCalendarWeeksUtc(year, month), [year, month]);
+
+  function prevMonth() {
+    const d = new Date(cursor);
+    d.setUTCMonth(d.getUTCMonth() - 1);
+    d.setUTCDate(1);
+    onChangeCursor(d);
+  }
+
+  function nextMonth() {
+    const d = new Date(cursor);
+    d.setUTCMonth(d.getUTCMonth() + 1);
+    d.setUTCDate(1);
+    onChangeCursor(d);
+  }
+
+  function statusForYmd(ymd) {
+    const count = bookedCountByDate.get(ymd) || 0;
+    return count >= dailyCapacity ? 'full' : 'available';
+  }
+
+  return (
+    <View style={styles.calendarCard}>
+      <View style={styles.calendarHeaderRow}>
+        <Button title="<" onPress={prevMonth} />
+        <Text style={styles.calendarTitle}>
+          {monthName} {year}
+        </Text>
+        <Button title=">" onPress={nextMonth} />
+      </View>
+
+      <View style={styles.calendarWeekdaysRow}>
+        {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => (
+          <Text key={d} style={styles.calendarWeekday}>
+            {d}
+          </Text>
+        ))}
+      </View>
+
+      {weeks.map((week, wi) => (
+        <View key={wi} style={styles.calendarWeekRow}>
+          {week.map((cell, di) => {
+            if (!cell) {
+              return <View key={di} style={[styles.calendarDay, styles.calendarDayEmpty]} />;
+            }
+
+            const ymd = cell.ymd;
+            const status = statusForYmd(ymd);
+            const isSelected = ymd === selectedDateYmd;
+            const disabled = status === 'full';
+
+            return (
+              <Pressable
+                key={di}
+                disabled={disabled}
+                onPress={() => onSelectDateYmd(ymd)}
+                style={({ pressed }) => [
+                  styles.calendarDay,
+                  status === 'available' ? styles.calendarDayAvailable : styles.calendarDayFull,
+                  isSelected ? styles.calendarDaySelected : null,
+                  disabled ? styles.calendarDayDisabled : null,
+                  pressed ? styles.calendarDayPressed : null,
+                ]}
+              >
+                <Text style={styles.calendarDayText}>{cell.day}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ))}
+
+      <View style={styles.calendarLegendRow}>
+        <View style={[styles.legendChip, styles.legendAvailable]}>
+          <Text style={styles.legendText}>Available</Text>
+        </View>
+        <View style={[styles.legendChip, styles.legendFull]}>
+          <Text style={styles.legendText}>Fully Booked</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function buildCalendarWeeksUtc(year, monthIndex) {
+  const first = new Date(Date.UTC(year, monthIndex, 1, 0, 0, 0));
+  const startDow = first.getUTCDay();
+  const daysInMonth = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+
+  const cells = [];
+  for (let i = 0; i < startDow; i++) cells.push(null);
+  for (let day = 1; day <= daysInMonth; day++) {
+    const d = new Date(Date.UTC(year, monthIndex, day, 0, 0, 0));
+    cells.push({
+      day,
+      ymd: d.toISOString().slice(0, 10),
+    });
+  }
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const weeks = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+  return weeks;
 }
 
 const styles = StyleSheet.create({
@@ -420,5 +579,91 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: '#8a1f17',
+  },
+
+  calendarCard: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#e5e5e5',
+    borderRadius: 8,
+    padding: 10,
+  },
+  calendarHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  calendarTitle: {
+    fontWeight: '700',
+  },
+  calendarWeekdaysRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  calendarWeekday: {
+    width: 38,
+    textAlign: 'center',
+    color: '#666',
+    fontWeight: '600',
+  },
+  calendarWeekRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  calendarDay: {
+    width: 38,
+    height: 32,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e5e5e5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarDayEmpty: {
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+  },
+  calendarDayAvailable: {
+    backgroundColor: '#e6f7e6',
+  },
+  calendarDayFull: {
+    backgroundColor: '#fdecea',
+  },
+  calendarDaySelected: {
+    borderColor: '#444',
+    borderWidth: 2,
+  },
+  calendarDayPressed: {
+    opacity: 0.8,
+  },
+  calendarDayDisabled: {
+    opacity: 0.5,
+  },
+  calendarDayText: {
+    fontWeight: '700',
+  },
+  calendarLegendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  legendChip: {
+    flex: 1,
+    paddingVertical: 6,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  legendAvailable: {
+    backgroundColor: '#e6f7e6',
+    marginRight: 8,
+  },
+  legendFull: {
+    backgroundColor: '#fdecea',
+  },
+  legendText: {
+    fontWeight: '700',
   },
 });
