@@ -1,20 +1,411 @@
+import axios from 'axios';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Button,
+  FlatList,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 export default function App() {
+  const [apiBaseUrl, setApiBaseUrl] = useState('http://10.0.2.2:8000');
+  const [mode, setMode] = useState('login'); // 'login' | 'register'
+
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('');
+
+  const [token, setToken] = useState(null);
+  const [me, setMe] = useState(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const [appointments, setAppointments] = useState([]);
+  const [doctorName, setDoctorName] = useState('');
+  const [scheduledForIso, setScheduledForIso] = useState('2030-01-01T10:00:00Z');
+  const [reason, setReason] = useState('');
+  const [notes, setNotes] = useState('');
+
+  const api = useMemo(() => {
+    const instance = axios.create({
+      baseURL: apiBaseUrl,
+      timeout: 15000,
+    });
+
+    instance.interceptors.request.use((config) => {
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    });
+
+    return instance;
+  }, [apiBaseUrl, token]);
+
+  async function onRegister() {
+    setBusy(true);
+    setError('');
+    try {
+      await api.post('/api/auth/register/', {
+        username,
+        password,
+        email,
+      });
+      setMode('login');
+      setError('Registered. Now log in.');
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onLogin() {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await api.post('/api/auth/token/', {
+        username,
+        password,
+      });
+      setToken(res.data.access);
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function fetchMe() {
+    if (!token) return;
+    try {
+      const res = await api.get('/api/auth/me/');
+      setMe(res.data);
+    } catch (e) {
+      // Non-fatal
+    }
+  }
+
+  async function fetchAppointments() {
+    if (!token) return;
+    setBusy(true);
+    setError('');
+    try {
+      const res = await api.get('/api/appointments/');
+      setAppointments(res.data);
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function setAppointmentStatus(id, status) {
+    setBusy(true);
+    setError('');
+    try {
+      await api.patch(`/api/appointments/${id}/`, { status });
+      await fetchAppointments();
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createAppointment() {
+    setBusy(true);
+    setError('');
+    try {
+      await api.post('/api/appointments/', {
+        doctor_name: doctorName,
+        scheduled_for: scheduledForIso,
+        reason,
+        notes,
+      });
+      setDoctorName('');
+      setReason('');
+      setNotes('');
+      await fetchAppointments();
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function logout() {
+    setToken(null);
+    setMe(null);
+    setAppointments([]);
+  }
+
+  useEffect(() => {
+    fetchMe();
+    fetchAppointments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
   return (
-    <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>UA Clinic Appointment System</Text>
+        <Text style={styles.subtitle}>
+          Backend stores reason/notes encrypted with AES-GCM.
+        </Text>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.label}>API Base URL</Text>
+        <TextInput
+          value={apiBaseUrl}
+          onChangeText={setApiBaseUrl}
+          autoCapitalize="none"
+          style={styles.input}
+          placeholder="http://10.0.2.2:8000"
+        />
+        <Text style={styles.hint}>
+          Android emulator: 10.0.2.2 • Web/iOS: localhost • Physical device: your PC LAN IP
+        </Text>
+      </View>
+
+      {!!error && (
+        <View style={styles.errorBox}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
+
+      {!token ? (
+        <View style={styles.card}>
+          <View style={styles.row}>
+            <Button
+              title="Login"
+              onPress={() => setMode('login')}
+              disabled={busy}
+            />
+            <View style={styles.spacer} />
+            <Button
+              title="Register"
+              onPress={() => setMode('register')}
+              disabled={busy}
+            />
+          </View>
+
+          <Text style={styles.label}>Username</Text>
+          <TextInput
+            value={username}
+            onChangeText={setUsername}
+            autoCapitalize="none"
+            style={styles.input}
+          />
+
+          <Text style={styles.label}>Password</Text>
+          <TextInput
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            style={styles.input}
+          />
+
+          {mode === 'register' && (
+            <>
+              <Text style={styles.label}>Email (optional)</Text>
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                style={styles.input}
+              />
+            </>
+          )}
+
+          <Button
+            title={mode === 'login' ? 'Login' : 'Create account'}
+            onPress={mode === 'login' ? onLogin : onRegister}
+            disabled={busy || !username || !password}
+          />
+        </View>
+      ) : (
+        <>
+          <View style={styles.card}>
+            <View style={styles.row}>
+              <Button title="Refresh" onPress={fetchAppointments} disabled={busy} />
+              <View style={styles.spacer} />
+              <Button title="Logout" onPress={logout} disabled={busy} />
+            </View>
+
+            <Text style={styles.hint}>
+              Logged in as: {me?.username || username}
+              {me?.is_staff ? ' (staff)' : ''}
+            </Text>
+
+            <Text style={styles.sectionTitle}>Create Appointment</Text>
+            <Text style={styles.label}>Doctor Name</Text>
+            <TextInput value={doctorName} onChangeText={setDoctorName} style={styles.input} />
+
+            <Text style={styles.label}>Scheduled For (ISO)</Text>
+            <TextInput
+              value={scheduledForIso}
+              onChangeText={setScheduledForIso}
+              autoCapitalize="none"
+              style={styles.input}
+              placeholder="2030-01-01T10:00:00Z"
+            />
+            <Text style={styles.hint}>Example: 2030-01-01T10:00:00Z</Text>
+
+            <Text style={styles.label}>Reason</Text>
+            <TextInput value={reason} onChangeText={setReason} style={styles.input} />
+
+            <Text style={styles.label}>Notes</Text>
+            <TextInput value={notes} onChangeText={setNotes} style={styles.input} />
+
+            <Button
+              title="Create"
+              onPress={createAppointment}
+              disabled={busy || !doctorName || !scheduledForIso}
+            />
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>My Appointments</Text>
+            <FlatList
+              data={appointments}
+              keyExtractor={(item) => String(item.id)}
+              ListEmptyComponent={<Text style={styles.hint}>No appointments yet.</Text>}
+              renderItem={({ item }) => (
+                <View style={styles.item}>
+                  <Text style={styles.itemTitle}>
+                    {item.doctor_name} • {item.status}
+                  </Text>
+                  <Text style={styles.itemMeta}>{item.scheduled_for}</Text>
+                  {!!item.reason && <Text style={styles.itemBody}>Reason: {item.reason}</Text>}
+                  {!!item.notes && <Text style={styles.itemBody}>Notes: {item.notes}</Text>}
+
+                  <View style={[styles.row, { marginTop: 8 }]}>
+                    {me?.is_staff ? (
+                      <>
+                        <Button
+                          title="Confirm"
+                          onPress={() => setAppointmentStatus(item.id, 'confirmed')}
+                          disabled={busy}
+                        />
+                        <View style={styles.spacer} />
+                        <Button
+                          title="Cancel"
+                          onPress={() => setAppointmentStatus(item.id, 'cancelled')}
+                          disabled={busy}
+                        />
+                      </>
+                    ) : (
+                      <Button
+                        title="Cancel"
+                        onPress={() => setAppointmentStatus(item.id, 'cancelled')}
+                        disabled={busy}
+                      />
+                    )}
+                  </View>
+                </View>
+              )}
+            />
+          </View>
+        </>
+      )}
+
       <StatusBar style="auto" />
-    </View>
+    </SafeAreaView>
   );
+}
+
+function getErrorMessage(e) {
+  if (e?.response?.data) {
+    if (typeof e.response.data === 'string') return e.response.data;
+    return JSON.stringify(e.response.data);
+  }
+  return e?.message || 'Request failed';
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    padding: 16,
     backgroundColor: '#fff',
+  },
+  header: {
+    marginBottom: 8,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  subtitle: {
+    marginTop: 4,
+    color: '#444',
+  },
+  card: {
+    borderWidth: 1,
+    borderColor: '#e5e5e5',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+  },
+  label: {
+    marginTop: 10,
+    marginBottom: 4,
+    fontWeight: '600',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  hint: {
+    marginTop: 6,
+    color: '#666',
+  },
+  row: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+  },
+  spacer: {
+    width: 12,
+  },
+  sectionTitle: {
+    marginTop: 10,
+    marginBottom: 6,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  item: {
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    paddingVertical: 10,
+  },
+  itemTitle: {
+    fontWeight: '700',
+  },
+  itemMeta: {
+    color: '#666',
+    marginTop: 2,
+  },
+  itemBody: {
+    marginTop: 4,
+  },
+  errorBox: {
+    marginTop: 8,
+    padding: 10,
+    borderRadius: 6,
+    backgroundColor: '#fdecea',
+    borderWidth: 1,
+    borderColor: '#f5c2c0',
+  },
+  errorText: {
+    color: '#8a1f17',
   },
 });
