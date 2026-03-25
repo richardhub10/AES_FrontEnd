@@ -74,6 +74,10 @@ export default function App() {
       const d = new Date(start);
       d.setUTCDate(start.getUTCDate() + i);
       const ymd = d.toISOString().slice(0, 10);
+
+      // No appointments on weekends.
+      if (isWeekendYmd(ymd)) continue;
+
       const count = bookedCountByDate.get(ymd) || 0;
       if (count < DAILY_CAPACITY) return ymd;
     }
@@ -169,6 +173,11 @@ export default function App() {
   }
 
   async function createAppointment() {
+    if (isWeekendYmd(selectedDateYmd)) {
+      setError('Appointments cannot be created on Saturday or Sunday. Please choose a weekday.');
+      return;
+    }
+
     setBusy(true);
     setError('');
     try {
@@ -206,6 +215,17 @@ export default function App() {
     // Always start on the form after login.
     if (token) setShowAppointments(false);
   }, [token]);
+
+  useEffect(() => {
+    // If the selected day becomes invalid (weekend or fully booked), snap to earliest weekday.
+    if (!token) return;
+    if (!earliestAvailableYmd) return;
+    const count = bookedCountByDate.get(selectedDateYmd) || 0;
+    const isFull = count >= DAILY_CAPACITY;
+    if (isWeekendYmd(selectedDateYmd) || isFull) {
+      setSelectedDateYmd(earliestAvailableYmd);
+    }
+  }, [token, earliestAvailableYmd, bookedCountByDate, selectedDateYmd, DAILY_CAPACITY]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -332,7 +352,7 @@ export default function App() {
               <Button
                 title="Create"
                 onPress={createAppointment}
-                disabled={busy || !scheduledForIso}
+                disabled={busy || !scheduledForIso || isWeekendYmd(selectedDateYmd)}
               />
             </View>
           ) : (
@@ -437,6 +457,10 @@ function Calendar({
     return count >= dailyCapacity ? 'full' : 'available';
   }
 
+  function isWeekend(ymd) {
+    return isWeekendYmd(ymd);
+  }
+
   return (
     <View style={styles.calendarCard}>
       <View style={styles.calendarHeaderRow}>
@@ -465,7 +489,7 @@ function Calendar({
             const ymd = cell.ymd;
             const status = statusForYmd(ymd);
             const isSelected = ymd === selectedDateYmd;
-            const disabled = status === 'full';
+            const disabled = status === 'full' || isWeekend(ymd);
 
             return (
               <Pressable
@@ -497,6 +521,13 @@ function Calendar({
       </View>
     </View>
   );
+}
+
+function isWeekendYmd(ymd) {
+  // Sunday = 0, Saturday = 6
+  const d = new Date(`${ymd}T00:00:00Z`);
+  const dow = d.getUTCDay();
+  return dow === 0 || dow === 6;
 }
 
 function buildCalendarWeeksUtc(year, monthIndex) {
