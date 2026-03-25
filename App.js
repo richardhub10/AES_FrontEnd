@@ -37,6 +37,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
 
   const [appointments, setAppointments] = useState([]);
+  const [decryptedById, setDecryptedById] = useState(() => new Map());
   const DAILY_CAPACITY = Number(
     (typeof process !== 'undefined' && process?.env?.EXPO_PUBLIC_DAILY_CAPACITY) ||
       10,
@@ -181,6 +182,34 @@ export default function App() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function decryptAppointment(id) {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await api.get(`/api/appointments/${id}/decrypt/`);
+      setDecryptedById((prev) => {
+        const next = new Map(prev);
+        next.set(id, {
+          reason: res.data?.reason || '',
+          notes: res.data?.notes || '',
+        });
+        return next;
+      });
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function hideDecrypted(id) {
+    setDecryptedById((prev) => {
+      const next = new Map(prev);
+      next.delete(id);
+      return next;
+    });
   }
 
   async function createAppointment() {
@@ -450,32 +479,69 @@ export default function App() {
                       <Text style={styles.itemMeta}>Patient: {item.patient_username}</Text>
                     )}
                     <Text style={styles.itemMeta}>{item.scheduled_for}</Text>
-                    {!!item.reason && <Text style={styles.itemBody}>Reason: {item.reason}</Text>}
-                    {!!item.notes && <Text style={styles.itemBody}>Notes: {item.notes}</Text>}
 
-                    <View style={[styles.row, { marginTop: 8 }]}>
-                      {me?.is_staff ? (
+                    {(() => {
+                      const dec = decryptedById.get(item.id);
+                      const reasonText = dec ? dec.reason : item.reason;
+                      const notesText = dec ? dec.notes : item.notes;
+
+                      return (
                         <>
-                          <Button
-                            title="Confirm"
-                            onPress={() => setAppointmentStatus(item.id, 'confirmed')}
-                            disabled={busy}
-                          />
-                          <View style={styles.spacer} />
-                          <Button
-                            title="Cancel"
-                            onPress={() => setAppointmentStatus(item.id, 'cancelled')}
-                            disabled={busy}
-                          />
+                          {!!reasonText && (
+                            <Text style={styles.itemBody}>
+                              Reason: {reasonText}
+                              {!dec ? ' (encrypted)' : ''}
+                            </Text>
+                          )}
+                          {!!notesText && (
+                            <Text style={styles.itemBody}>
+                              Notes: {notesText}
+                              {!dec ? ' (encrypted)' : ''}
+                            </Text>
+                          )}
+
+                          <View style={[styles.row, { marginTop: 8 }]}>
+                            {!dec ? (
+                              <Button
+                                title="Decrypt"
+                                onPress={() => decryptAppointment(item.id)}
+                                disabled={busy}
+                              />
+                            ) : (
+                              <Button
+                                title="Hide"
+                                onPress={() => hideDecrypted(item.id)}
+                                disabled={busy}
+                              />
+                            )}
+
+                            <View style={styles.spacer} />
+
+                            {me?.is_staff ? (
+                              <>
+                                <Button
+                                  title="Confirm"
+                                  onPress={() => setAppointmentStatus(item.id, 'confirmed')}
+                                  disabled={busy}
+                                />
+                                <View style={styles.spacer} />
+                                <Button
+                                  title="Cancel"
+                                  onPress={() => setAppointmentStatus(item.id, 'cancelled')}
+                                  disabled={busy}
+                                />
+                              </>
+                            ) : (
+                              <Button
+                                title="Cancel"
+                                onPress={() => setAppointmentStatus(item.id, 'cancelled')}
+                                disabled={busy}
+                              />
+                            )}
+                          </View>
                         </>
-                      ) : (
-                        <Button
-                          title="Cancel"
-                          onPress={() => setAppointmentStatus(item.id, 'cancelled')}
-                          disabled={busy}
-                        />
-                      )}
-                    </View>
+                      );
+                    })()}
                   </View>
                 )}
               />
