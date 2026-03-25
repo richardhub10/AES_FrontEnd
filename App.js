@@ -75,15 +75,29 @@ export default function App() {
     return map;
   }, [appointments]);
 
+  const staffConfirmedAppointments = useMemo(() => {
+    return (appointments || []).filter((appt) => appt?.status === 'confirmed');
+  }, [appointments]);
+
+  const bookedCountByDateConfirmed = useMemo(() => {
+    const map = new Map();
+    for (const appt of staffConfirmedAppointments) {
+      const ymd = typeof appt?.scheduled_for === 'string' ? appt.scheduled_for.slice(0, 10) : '';
+      if (!ymd) continue;
+      map.set(ymd, (map.get(ymd) || 0) + 1);
+    }
+    return map;
+  }, [staffConfirmedAppointments]);
+
   const staffAppointmentsForSelectedDate = useMemo(() => {
     const ymd = selectedDateYmd;
-    const items = (appointments || []).filter((appt) => {
+    const items = staffConfirmedAppointments.filter((appt) => {
       const apptYmd = typeof appt?.scheduled_for === 'string' ? appt.scheduled_for.slice(0, 10) : '';
       return apptYmd === ymd;
     });
     items.sort((a, b) => String(a?.scheduled_for || '').localeCompare(String(b?.scheduled_for || '')));
     return items;
-  }, [appointments, selectedDateYmd]);
+  }, [staffConfirmedAppointments, selectedDateYmd]);
 
   const earliestAvailableYmd = useMemo(() => {
     const start = new Date();
@@ -501,7 +515,7 @@ export default function App() {
                   onChangeCursor={setCalendarCursor}
                   selectedDateYmd={selectedDateYmd}
                   onSelectDateYmd={setSelectedDateYmd}
-                  bookedCountByDate={bookedCountByDate}
+                  bookedCountByDate={bookedCountByDateConfirmed}
                   dailyCapacity={DAILY_CAPACITY}
                 />
 
