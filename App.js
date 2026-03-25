@@ -445,34 +445,38 @@ export default function App() {
                               </Text>
                             )}
 
-                            <View style={[styles.row, { marginTop: 8 }]}>
-                              {!dec ? (
+                            <View style={styles.actionRow}>
+                              <View style={styles.actionBtn}>
+                                {!dec ? (
+                                  <Button
+                                    title="Decrypt"
+                                    onPress={() => decryptAppointment(item.id)}
+                                    disabled={busy}
+                                  />
+                                ) : (
+                                  <Button
+                                    title="Hide"
+                                    onPress={() => hideDecrypted(item.id)}
+                                    disabled={busy}
+                                  />
+                                )}
+                              </View>
+
+                              <View style={styles.actionBtn}>
                                 <Button
-                                  title="Decrypt"
-                                  onPress={() => decryptAppointment(item.id)}
+                                  title="Confirm"
+                                  onPress={() => setAppointmentStatus(item.id, 'confirmed')}
                                   disabled={busy}
                                 />
-                              ) : (
+                              </View>
+
+                              <View style={styles.actionBtn}>
                                 <Button
-                                  title="Hide"
-                                  onPress={() => hideDecrypted(item.id)}
+                                  title="Cancel"
+                                  onPress={() => setAppointmentStatus(item.id, 'cancelled')}
                                   disabled={busy}
                                 />
-                              )}
-
-                              <View style={styles.spacer} />
-
-                              <Button
-                                title="Confirm"
-                                onPress={() => setAppointmentStatus(item.id, 'confirmed')}
-                                disabled={busy}
-                              />
-                              <View style={styles.spacer} />
-                              <Button
-                                title="Cancel"
-                                onPress={() => setAppointmentStatus(item.id, 'cancelled')}
-                                disabled={busy}
-                              />
+                              </View>
                             </View>
                           </>
                         );
@@ -556,34 +560,38 @@ export default function App() {
                               </Text>
                             )}
 
-                            <View style={[styles.row, { marginTop: 8 }]}>
-                              {!dec ? (
+                            <View style={styles.actionRow}>
+                              <View style={styles.actionBtn}>
+                                {!dec ? (
+                                  <Button
+                                    title="Decrypt"
+                                    onPress={() => decryptAppointment(item.id)}
+                                    disabled={busy}
+                                  />
+                                ) : (
+                                  <Button
+                                    title="Hide"
+                                    onPress={() => hideDecrypted(item.id)}
+                                    disabled={busy}
+                                  />
+                                )}
+                              </View>
+
+                              <View style={styles.actionBtn}>
                                 <Button
-                                  title="Decrypt"
-                                  onPress={() => decryptAppointment(item.id)}
+                                  title="Confirm"
+                                  onPress={() => setAppointmentStatus(item.id, 'confirmed')}
                                   disabled={busy}
                                 />
-                              ) : (
+                              </View>
+
+                              <View style={styles.actionBtn}>
                                 <Button
-                                  title="Hide"
-                                  onPress={() => hideDecrypted(item.id)}
+                                  title="Cancel"
+                                  onPress={() => setAppointmentStatus(item.id, 'cancelled')}
                                   disabled={busy}
                                 />
-                              )}
-
-                              <View style={styles.spacer} />
-
-                              <Button
-                                title="Confirm"
-                                onPress={() => setAppointmentStatus(item.id, 'confirmed')}
-                                disabled={busy}
-                              />
-                              <View style={styles.spacer} />
-                              <Button
-                                title="Cancel"
-                                onPress={() => setAppointmentStatus(item.id, 'cancelled')}
-                                disabled={busy}
-                              />
+                              </View>
                             </View>
                           </>
                         );
@@ -625,28 +633,30 @@ export default function App() {
                             </Text>
                           )}
 
-                          <View style={[styles.row, { marginTop: 8 }]}>
-                            {!dec ? (
+                          <View style={styles.actionRow}>
+                            <View style={styles.actionBtn}>
+                              {!dec ? (
+                                <Button
+                                  title="Decrypt"
+                                  onPress={() => decryptAppointment(item.id)}
+                                  disabled={busy}
+                                />
+                              ) : (
+                                <Button
+                                  title="Hide"
+                                  onPress={() => hideDecrypted(item.id)}
+                                  disabled={busy}
+                                />
+                              )}
+                            </View>
+
+                            <View style={styles.actionBtn}>
                               <Button
-                                title="Decrypt"
-                                onPress={() => decryptAppointment(item.id)}
+                                title="Cancel"
+                                onPress={() => setAppointmentStatus(item.id, 'cancelled')}
                                 disabled={busy}
                               />
-                            ) : (
-                              <Button
-                                title="Hide"
-                                onPress={() => hideDecrypted(item.id)}
-                                disabled={busy}
-                              />
-                            )}
-
-                            <View style={styles.spacer} />
-
-                            <Button
-                              title="Cancel"
-                              onPress={() => setAppointmentStatus(item.id, 'cancelled')}
-                              disabled={busy}
-                            />
+                            </View>
                           </View>
                         </>
                       );
@@ -948,6 +958,16 @@ const styles = StyleSheet.create({
   },
   spacer: {
     width: 12,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  actionBtn: {
+    marginRight: 12,
+    marginBottom: 8,
   },
   sectionTitle: {
     marginTop: 10,
