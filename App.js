@@ -19,6 +19,7 @@ const API_BASE_URL =
 
 export default function App() {
   const [mode, setMode] = useState('login'); // 'login' | 'register'
+  const [screen, setScreen] = useState('home'); // 'home' | 'appointments'
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -191,6 +192,7 @@ export default function App() {
     setToken(null);
     setMe(null);
     setAppointments([]);
+    setScreen('home');
   }
 
   useEffect(() => {
@@ -198,6 +200,13 @@ export default function App() {
     fetchAppointments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  useEffect(() => {
+    if (token && screen === 'appointments') {
+      fetchAppointments();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -267,6 +276,12 @@ export default function App() {
             <View style={styles.row}>
               <Button title="Refresh" onPress={fetchAppointments} disabled={busy} />
               <View style={styles.spacer} />
+              <Button
+                title="Appointment"
+                onPress={() => setScreen('appointments')}
+                disabled={busy || screen === 'appointments'}
+              />
+              <View style={styles.spacer} />
               <Button title="Logout" onPress={logout} disabled={busy} />
             </View>
 
@@ -275,88 +290,108 @@ export default function App() {
               {me?.is_staff ? ' (staff)' : ''}
             </Text>
 
-            <Text style={styles.sectionTitle}>Create Appointment</Text>
-
-            <Text style={styles.label}>Scheduled For</Text>
-            {!!earliestAvailableYmd && (
-              <Text style={styles.hint}>Earliest available appointment: {earliestAvailableYmd}</Text>
+            {screen === 'home' && (
+              <Text style={styles.hint}>
+                Click “Appointment” to create and view appointments.
+              </Text>
             )}
-
-            <Calendar
-              cursor={calendarCursor}
-              onChangeCursor={setCalendarCursor}
-              selectedDateYmd={selectedDateYmd}
-              onSelectDateYmd={setSelectedDateYmd}
-              bookedCountByDate={bookedCountByDate}
-              dailyCapacity={DAILY_CAPACITY}
-            />
-
-            <Text style={styles.label}>Time (UTC)</Text>
-            <TextInput
-              value={selectedTime}
-              onChangeText={setSelectedTime}
-              autoCapitalize="none"
-              style={styles.input}
-              placeholder="10:00"
-              {...(Platform.OS === 'web' ? { type: 'time' } : null)}
-            />
-            <Text style={styles.hint}>Selected: {selectedDateYmd} {selectedTime}</Text>
-
-            <Text style={styles.label}>Reason</Text>
-            <TextInput value={reason} onChangeText={setReason} style={styles.input} />
-
-            <Text style={styles.label}>Notes</Text>
-            <TextInput value={notes} onChangeText={setNotes} style={styles.input} />
-
-            <Button
-              title="Create"
-              onPress={createAppointment}
-              disabled={busy || !scheduledForIso}
-            />
           </View>
 
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>My Appointments</Text>
-            <FlatList
-              data={appointments}
-              keyExtractor={(item) => String(item.id)}
-              ListEmptyComponent={<Text style={styles.hint}>No appointments yet.</Text>}
-              renderItem={({ item }) => (
-                <View style={styles.item}>
-                  <Text style={styles.itemTitle}>
-                    {item.status}
-                  </Text>
-                  <Text style={styles.itemMeta}>{item.scheduled_for}</Text>
-                  {!!item.reason && <Text style={styles.itemBody}>Reason: {item.reason}</Text>}
-                  {!!item.notes && <Text style={styles.itemBody}>Notes: {item.notes}</Text>}
-
-                  <View style={[styles.row, { marginTop: 8 }]}>
-                    {me?.is_staff ? (
-                      <>
-                        <Button
-                          title="Confirm"
-                          onPress={() => setAppointmentStatus(item.id, 'confirmed')}
-                          disabled={busy}
-                        />
-                        <View style={styles.spacer} />
-                        <Button
-                          title="Cancel"
-                          onPress={() => setAppointmentStatus(item.id, 'cancelled')}
-                          disabled={busy}
-                        />
-                      </>
-                    ) : (
-                      <Button
-                        title="Cancel"
-                        onPress={() => setAppointmentStatus(item.id, 'cancelled')}
-                        disabled={busy}
-                      />
-                    )}
-                  </View>
+          {screen === 'appointments' && (
+            <>
+              <View style={styles.card}>
+                <View style={styles.row}>
+                  <Button title="Back" onPress={() => setScreen('home')} disabled={busy} />
                 </View>
-              )}
-            />
-          </View>
+
+                <Text style={styles.sectionTitle}>Create Appointment</Text>
+
+                <Text style={styles.label}>Scheduled For</Text>
+                {!!earliestAvailableYmd && (
+                  <Text style={styles.hint}>
+                    Earliest available appointment: {earliestAvailableYmd}
+                  </Text>
+                )}
+
+                <Calendar
+                  cursor={calendarCursor}
+                  onChangeCursor={setCalendarCursor}
+                  selectedDateYmd={selectedDateYmd}
+                  onSelectDateYmd={setSelectedDateYmd}
+                  bookedCountByDate={bookedCountByDate}
+                  dailyCapacity={DAILY_CAPACITY}
+                />
+
+                <Text style={styles.label}>Time (UTC)</Text>
+                <TextInput
+                  value={selectedTime}
+                  onChangeText={setSelectedTime}
+                  autoCapitalize="none"
+                  style={styles.input}
+                  placeholder="10:00"
+                  {...(Platform.OS === 'web' ? { type: 'time' } : null)}
+                />
+                <Text style={styles.hint}>
+                  Selected: {selectedDateYmd} {selectedTime}
+                </Text>
+
+                <Text style={styles.label}>Reason</Text>
+                <TextInput value={reason} onChangeText={setReason} style={styles.input} />
+
+                <Text style={styles.label}>Notes</Text>
+                <TextInput value={notes} onChangeText={setNotes} style={styles.input} />
+
+                <Button
+                  title="Create"
+                  onPress={createAppointment}
+                  disabled={busy || !scheduledForIso}
+                />
+              </View>
+
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>My Appointments</Text>
+                <FlatList
+                  data={appointments}
+                  keyExtractor={(item) => String(item.id)}
+                  ListEmptyComponent={<Text style={styles.hint}>No appointments yet.</Text>}
+                  renderItem={({ item }) => (
+                    <View style={styles.item}>
+                      <Text style={styles.itemTitle}>{item.status}</Text>
+                      <Text style={styles.itemMeta}>{item.scheduled_for}</Text>
+                      {!!item.reason && (
+                        <Text style={styles.itemBody}>Reason: {item.reason}</Text>
+                      )}
+                      {!!item.notes && <Text style={styles.itemBody}>Notes: {item.notes}</Text>}
+
+                      <View style={[styles.row, { marginTop: 8 }]}> 
+                        {me?.is_staff ? (
+                          <>
+                            <Button
+                              title="Confirm"
+                              onPress={() => setAppointmentStatus(item.id, 'confirmed')}
+                              disabled={busy}
+                            />
+                            <View style={styles.spacer} />
+                            <Button
+                              title="Cancel"
+                              onPress={() => setAppointmentStatus(item.id, 'cancelled')}
+                              disabled={busy}
+                            />
+                          </>
+                        ) : (
+                          <Button
+                            title="Cancel"
+                            onPress={() => setAppointmentStatus(item.id, 'cancelled')}
+                            disabled={busy}
+                          />
+                        )}
+                      </View>
+                    </View>
+                  )}
+                />
+              </View>
+            </>
+          )}
         </>
       )}
 
