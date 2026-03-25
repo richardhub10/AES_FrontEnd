@@ -390,12 +390,16 @@ export default function App() {
             <View style={styles.row}>
               <Button title="Refresh" onPress={fetchAppointments} disabled={busy} />
               <View style={styles.spacer} />
-              <Button
-                title="Appointment"
-                onPress={() => setShowAppointments((v) => !v)}
-                disabled={busy}
-              />
-              <View style={styles.spacer} />
+              {!me?.is_staff && (
+                <>
+                  <Button
+                    title="Appointment"
+                    onPress={() => setShowAppointments((v) => !v)}
+                    disabled={busy}
+                  />
+                  <View style={styles.spacer} />
+                </>
+              )}
               <Button title="Logout" onPress={logout} disabled={busy} />
             </View>
 
@@ -405,69 +409,13 @@ export default function App() {
             </Text>
           </View>
 
-          {!showAppointments ? (
+          {!!token && !me ? (
             <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Create Appointment</Text>
-
-              {!!me?.is_staff && (
-                <Text style={styles.hint}>
-                  Staff accounts cannot create appointments. Use the Appointment list to confirm/cancel.
-                </Text>
-              )}
-
-              <Text style={styles.label}>Scheduled For</Text>
-              {!!earliestAvailableYmd && (
-                <Text style={styles.hint}>
-                  Earliest available appointment: {earliestAvailableYmd}
-                </Text>
-              )}
-
-              <Calendar
-                cursor={calendarCursor}
-                onChangeCursor={setCalendarCursor}
-                selectedDateYmd={selectedDateYmd}
-                onSelectDateYmd={setSelectedDateYmd}
-                bookedCountByDate={bookedCountByDate}
-                dailyCapacity={DAILY_CAPACITY}
-              />
-
-              <Text style={styles.label}>Time (UTC)</Text>
-              <View style={styles.pickerWrap}>
-                <Picker
-                  enabled={!busy && !me?.is_staff}
-                  selectedValue={selectedTime}
-                  onValueChange={(v) => setSelectedTime(String(v))}
-                  style={styles.picker}
-                >
-                  {timeOptions.map((opt) => (
-                    <Picker.Item key={opt.value} label={opt.label} value={opt.value} />
-                  ))}
-                </Picker>
-              </View>
-              <Text style={styles.hint}>
-                Selected: {selectedDateYmd} {selectedTime}
-              </Text>
-
-              <Text style={styles.label}>Reason</Text>
-              <TextInput value={reason} onChangeText={setReason} style={styles.input} />
-
-              <Text style={styles.label}>Notes</Text>
-              <TextInput value={notes} onChangeText={setNotes} style={styles.input} />
-
-              <Button
-                title="Create"
-                onPress={createAppointment}
-                disabled={
-                  busy ||
-                  !scheduledForIso ||
-                  isWeekendYmd(selectedDateYmd) ||
-                  !!me?.is_staff
-                }
-              />
+              <Text style={styles.hint}>Loading account…</Text>
             </View>
-          ) : (
+          ) : me?.is_staff || showAppointments ? (
             <View style={styles.card}>
-              <Text style={styles.sectionTitle}>My Appointments</Text>
+              <Text style={styles.sectionTitle}>{me?.is_staff ? 'Appointments' : 'My Appointments'}</Text>
               <FlatList
                 data={appointments}
                 keyExtractor={(item) => String(item.id)}
@@ -475,8 +423,13 @@ export default function App() {
                 renderItem={({ item }) => (
                   <View style={styles.item}>
                     <Text style={styles.itemTitle}>{item.status}</Text>
-                    {!!me?.is_staff && !!item.patient_username && (
-                      <Text style={styles.itemMeta}>Patient: {item.patient_username}</Text>
+                    {!!me?.is_staff && (
+                      <Text style={styles.itemMeta}>
+                        Patient: {item.patient_full_name || '—'}
+                        {item.patient_age !== null && item.patient_age !== undefined
+                          ? ` (Age: ${item.patient_age})`
+                          : ''}
+                      </Text>
                     )}
                     <Text style={styles.itemMeta}>{item.scheduled_for}</Text>
 
@@ -544,6 +497,66 @@ export default function App() {
                     })()}
                   </View>
                 )}
+              />
+            </View>
+          ) : (
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Create Appointment</Text>
+
+              {!!me?.is_staff && (
+                <Text style={styles.hint}>
+                  Staff accounts cannot create appointments. Use the Appointment list to confirm/cancel.
+                </Text>
+              )}
+
+              <Text style={styles.label}>Scheduled For</Text>
+              {!!earliestAvailableYmd && (
+                <Text style={styles.hint}>
+                  Earliest available appointment: {earliestAvailableYmd}
+                </Text>
+              )}
+
+              <Calendar
+                cursor={calendarCursor}
+                onChangeCursor={setCalendarCursor}
+                selectedDateYmd={selectedDateYmd}
+                onSelectDateYmd={setSelectedDateYmd}
+                bookedCountByDate={bookedCountByDate}
+                dailyCapacity={DAILY_CAPACITY}
+              />
+
+              <Text style={styles.label}>Time (UTC)</Text>
+              <View style={styles.pickerWrap}>
+                <Picker
+                  enabled={!busy && !me?.is_staff}
+                  selectedValue={selectedTime}
+                  onValueChange={(v) => setSelectedTime(String(v))}
+                  style={styles.picker}
+                >
+                  {timeOptions.map((opt) => (
+                    <Picker.Item key={opt.value} label={opt.label} value={opt.value} />
+                  ))}
+                </Picker>
+              </View>
+              <Text style={styles.hint}>
+                Selected: {selectedDateYmd} {selectedTime}
+              </Text>
+
+              <Text style={styles.label}>Reason</Text>
+              <TextInput value={reason} onChangeText={setReason} style={styles.input} />
+
+              <Text style={styles.label}>Notes</Text>
+              <TextInput value={notes} onChangeText={setNotes} style={styles.input} />
+
+              <Button
+                title="Create"
+                onPress={createAppointment}
+                disabled={
+                  busy ||
+                  !scheduledForIso ||
+                  isWeekendYmd(selectedDateYmd) ||
+                  !!me?.is_staff
+                }
               />
             </View>
           )}
