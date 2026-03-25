@@ -76,13 +76,19 @@ export default function App() {
   }, [appointments]);
 
   const staffConfirmedAppointments = useMemo(() => {
-    return (appointments || []).filter((appt) => appt?.status === 'confirmed');
+    return (appointments || []).filter((appt) => {
+      const status = String(appt?.status || '').trim().toLowerCase();
+      return status === 'confirmed';
+    });
   }, [appointments]);
 
   const staffInboxAppointments = useMemo(() => {
     // Staff "Appointments" view acts like an inbox: pending/cancelled only.
     // Confirmed appointments move to the calendar view.
-    return (appointments || []).filter((appt) => appt?.status !== 'confirmed');
+    return (appointments || []).filter((appt) => {
+      const status = String(appt?.status || '').trim().toLowerCase();
+      return status !== 'confirmed';
+    });
   }, [appointments]);
 
   const bookedCountByDateConfirmed = useMemo(() => {
