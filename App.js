@@ -99,6 +99,8 @@ export default function App() {
     return items;
   }, [staffConfirmedAppointments, selectedDateYmd]);
 
+  const staffConfirmedAppointmentsForSelectedDate = staffAppointmentsForSelectedDate;
+
   const earliestAvailableYmd = useMemo(() => {
     const start = new Date();
     start.setUTCHours(0, 0, 0, 0);
@@ -540,9 +542,9 @@ export default function App() {
                   Appointments on {selectedDateYmd}
                 </Text>
                 <FlatList
-                  data={staffAppointmentsForSelectedDate}
+                  data={staffConfirmedAppointmentsForSelectedDate}
                   keyExtractor={(item) => String(item.id)}
-                  ListEmptyComponent={<Text style={styles.hint}>No appointments for this date.</Text>}
+                  ListEmptyComponent={<Text style={styles.hint}>No confirmed appointments for this date.</Text>}
                   renderItem={({ item }) => (
                     <View style={styles.item}>
                       <Text style={styles.itemTitle}>{item.status}</Text>
@@ -589,14 +591,6 @@ export default function App() {
                                     disabled={busy}
                                   />
                                 )}
-                              </View>
-
-                              <View style={styles.actionBtn}>
-                                <Button
-                                  title="Confirm"
-                                  onPress={() => setAppointmentStatus(item.id, 'confirmed')}
-                                  disabled={busy}
-                                />
                               </View>
 
                               <View style={styles.actionBtn}>
