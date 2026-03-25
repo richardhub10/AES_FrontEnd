@@ -123,6 +123,7 @@ export default function App() {
         password,
       });
       setToken(res.data.access);
+      setShowAppointments(false);
     } catch (e) {
       setError(getErrorMessage(e));
     } finally {
@@ -199,6 +200,11 @@ export default function App() {
     fetchMe();
     fetchAppointments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  useEffect(() => {
+    // Always start on the form after login.
+    if (token) setShowAppointments(false);
   }, [token]);
 
   return (
@@ -292,57 +298,57 @@ export default function App() {
               </Text>
             )}
 
-            <Calendar
-              cursor={calendarCursor}
-              onChangeCursor={setCalendarCursor}
-              selectedDateYmd={selectedDateYmd}
-              onSelectDateYmd={setSelectedDateYmd}
-              bookedCountByDate={bookedCountByDate}
-              dailyCapacity={DAILY_CAPACITY}
-            />
+            {!showAppointments ? (
+              <View style={styles.card}>
+                <Text style={styles.hint}>
+                  Logged in as: {me?.username || username}
+                  {me?.is_staff ? ' (staff)' : ''}
+                </Text>
 
-            <Text style={styles.label}>Time (UTC)</Text>
-            <TextInput
-              value={selectedTime}
-              onChangeText={setSelectedTime}
-              autoCapitalize="none"
-              style={styles.input}
-              placeholder="10:00"
-              {...(Platform.OS === 'web' ? { type: 'time' } : null)}
-            />
-            <Text style={styles.hint}>
-              Selected: {selectedDateYmd} {selectedTime}
-            </Text>
+                <Text style={styles.sectionTitle}>Create Appointment</Text>
 
-            <Text style={styles.label}>Reason</Text>
-            <TextInput value={reason} onChangeText={setReason} style={styles.input} />
+                <Text style={styles.label}>Scheduled For</Text>
+                {!!earliestAvailableYmd && (
+                  <Text style={styles.hint}>
+                    Earliest available appointment: {earliestAvailableYmd}
+                  </Text>
+                )}
 
-            <Text style={styles.label}>Notes</Text>
-            <TextInput value={notes} onChangeText={setNotes} style={styles.input} />
+                <Calendar
+                  cursor={calendarCursor}
+                  onChangeCursor={setCalendarCursor}
+                  selectedDateYmd={selectedDateYmd}
+                  onSelectDateYmd={setSelectedDateYmd}
+                  bookedCountByDate={bookedCountByDate}
+                  dailyCapacity={DAILY_CAPACITY}
+                />
 
-            <Button
-              title="Create"
-              onPress={createAppointment}
-              disabled={busy || !scheduledForIso}
-            />
-          </View>
+                <Text style={styles.label}>Time (UTC)</Text>
+                <TextInput
+                  value={selectedTime}
+                  onChangeText={setSelectedTime}
+                  autoCapitalize="none"
+                  style={styles.input}
+                  placeholder="10:00"
+                  {...(Platform.OS === 'web' ? { type: 'time' } : null)}
+                />
+                <Text style={styles.hint}>
+                  Selected: {selectedDateYmd} {selectedTime}
+                </Text>
 
-          {showAppointments && (
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>My Appointments</Text>
-              <FlatList
-                data={appointments}
-                keyExtractor={(item) => String(item.id)}
-                ListEmptyComponent={<Text style={styles.hint}>No appointments yet.</Text>}
-                renderItem={({ item }) => (
-                  <View style={styles.item}>
-                    <Text style={styles.itemTitle}>{item.status}</Text>
-                    <Text style={styles.itemMeta}>{item.scheduled_for}</Text>
-                    {!!item.reason && <Text style={styles.itemBody}>Reason: {item.reason}</Text>}
-                    {!!item.notes && <Text style={styles.itemBody}>Notes: {item.notes}</Text>}
+                <Text style={styles.label}>Reason</Text>
+                <TextInput value={reason} onChangeText={setReason} style={styles.input} />
 
-                    <View style={[styles.row, { marginTop: 8 }]}>
-                      {me?.is_staff ? (
+                <Text style={styles.label}>Notes</Text>
+                <TextInput value={notes} onChangeText={setNotes} style={styles.input} />
+
+                <Button
+                  title="Create"
+                  onPress={createAppointment}
+                  disabled={busy || !scheduledForIso}
+                />
+              </View>
+            ) : (
                         <>
                           <Button
                             title="Confirm"
