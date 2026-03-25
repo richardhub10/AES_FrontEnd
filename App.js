@@ -8,6 +8,7 @@ import {
   Platform,
   Pressable,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -309,7 +310,12 @@ export default function App() {
   }, [token, earliestAvailableYmd, bookedCountByDate, selectedDateYmd, DAILY_CAPACITY]);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+      >
       <View style={styles.header}>
         <Text style={styles.title}>UA Clinic Appointment System</Text>
       </View>
@@ -440,6 +446,7 @@ export default function App() {
                 <Text style={styles.sectionTitle}>Appointments</Text>
                 <FlatList
                   data={staffInboxAppointments}
+                  scrollEnabled={false}
                   keyExtractor={(item) => String(item.id)}
                   ListEmptyComponent={<Text style={styles.hint}>No pending appointments.</Text>}
                   renderItem={({ item }) => (
@@ -555,6 +562,7 @@ export default function App() {
                 </Text>
                 <FlatList
                   data={staffConfirmedAppointmentsForSelectedDate}
+                  scrollEnabled={false}
                   keyExtractor={(item) => String(item.id)}
                   ListEmptyComponent={<Text style={styles.hint}>No confirmed appointments for this date.</Text>}
                   renderItem={({ item }) => (
@@ -626,6 +634,7 @@ export default function App() {
               <Text style={styles.sectionTitle}>My Appointments</Text>
               <FlatList
                 data={appointments}
+                scrollEnabled={false}
                 keyExtractor={(item) => String(item.id)}
                 ListEmptyComponent={<Text style={styles.hint}>No appointments yet.</Text>}
                 renderItem={({ item }) => (
@@ -738,6 +747,7 @@ export default function App() {
         </>
       )}
 
+      </ScrollView>
       <StatusBar style="auto" />
     </SafeAreaView>
   );
@@ -923,8 +933,15 @@ function formatTimeLabel(hhmm) {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
+    backgroundColor: '#fff',
+  },
+  scroll: {
+    flex: 1,
+  },
+  container: {
+    flexGrow: 1,
     padding: 16,
     backgroundColor: '#fff',
   },
@@ -975,9 +992,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
   },
   spacer: {
     width: 12,
+    height: 8,
   },
   actionRow: {
     flexDirection: 'row',
@@ -1006,9 +1025,11 @@ const styles = StyleSheet.create({
   itemMeta: {
     color: '#666',
     marginTop: 2,
+    flexShrink: 1,
   },
   itemBody: {
     marginTop: 4,
+    flexShrink: 1,
   },
   errorBox: {
     marginTop: 8,
