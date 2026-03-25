@@ -79,6 +79,12 @@ export default function App() {
     return (appointments || []).filter((appt) => appt?.status === 'confirmed');
   }, [appointments]);
 
+  const staffInboxAppointments = useMemo(() => {
+    // Staff "Appointments" view acts like an inbox: pending/cancelled only.
+    // Confirmed appointments move to the calendar view.
+    return (appointments || []).filter((appt) => appt?.status !== 'confirmed');
+  }, [appointments]);
+
   const bookedCountByDateConfirmed = useMemo(() => {
     const map = new Map();
     for (const appt of staffConfirmedAppointments) {
@@ -427,9 +433,9 @@ export default function App() {
               <View style={styles.card}>
                 <Text style={styles.sectionTitle}>Appointments</Text>
                 <FlatList
-                  data={appointments}
+                  data={staffInboxAppointments}
                   keyExtractor={(item) => String(item.id)}
-                  ListEmptyComponent={<Text style={styles.hint}>No appointments yet.</Text>}
+                  ListEmptyComponent={<Text style={styles.hint}>No pending appointments.</Text>}
                   renderItem={({ item }) => (
                     <View style={styles.item}>
                       <Text style={styles.itemTitle}>{item.status}</Text>
