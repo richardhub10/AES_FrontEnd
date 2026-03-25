@@ -75,6 +75,16 @@ export default function App() {
     return map;
   }, [appointments]);
 
+  const staffAppointmentsForSelectedDate = useMemo(() => {
+    const ymd = selectedDateYmd;
+    const items = (appointments || []).filter((appt) => {
+      const apptYmd = typeof appt?.scheduled_for === 'string' ? appt.scheduled_for.slice(0, 10) : '';
+      return apptYmd === ymd;
+    });
+    items.sort((a, b) => String(a?.scheduled_for || '').localeCompare(String(b?.scheduled_for || '')));
+    return items;
+  }, [appointments, selectedDateYmd]);
+
   const earliestAvailableYmd = useMemo(() => {
     const start = new Date();
     start.setUTCHours(0, 0, 0, 0);
@@ -261,6 +271,7 @@ export default function App() {
   useEffect(() => {
     // If the selected day becomes invalid (weekend or fully booked), snap to earliest weekday.
     if (!token) return;
+    if (me?.is_staff) return;
     if (!earliestAvailableYmd) return;
     const count = bookedCountByDate.get(selectedDateYmd) || 0;
     const isFull = count >= DAILY_CAPACITY;
@@ -506,6 +517,80 @@ export default function App() {
                 <Text style={styles.hint}>
                   Selected: {selectedDateYmd} {selectedTime}
                 </Text>
+
+                <Text style={[styles.sectionTitle, { marginTop: 12 }]}>
+                  Appointments on {selectedDateYmd}
+                </Text>
+                <FlatList
+                  data={staffAppointmentsForSelectedDate}
+                  keyExtractor={(item) => String(item.id)}
+                  ListEmptyComponent={<Text style={styles.hint}>No appointments for this date.</Text>}
+                  renderItem={({ item }) => (
+                    <View style={styles.item}>
+                      <Text style={styles.itemTitle}>{item.status}</Text>
+                      <Text style={styles.itemMeta}>
+                        Patient: {item.patient_full_name || '—'}
+                        {item.patient_age !== null && item.patient_age !== undefined
+                          ? ` (Age: ${item.patient_age})`
+                          : ''}
+                      </Text>
+                      <Text style={styles.itemMeta}>{item.scheduled_for}</Text>
+
+                      {(() => {
+                        const dec = decryptedById.get(item.id);
+                        const reasonText = dec ? dec.reason : item.reason;
+                        const notesText = dec ? dec.notes : item.notes;
+
+                        return (
+                          <>
+                            {!!reasonText && (
+                              <Text style={styles.itemBody}>
+                                Reason: {reasonText}
+                                {!dec ? ' (encrypted)' : ''}
+                              </Text>
+                            )}
+                            {!!notesText && (
+                              <Text style={styles.itemBody}>
+                                Notes: {notesText}
+                                {!dec ? ' (encrypted)' : ''}
+                              </Text>
+                            )}
+
+                            <View style={[styles.row, { marginTop: 8 }]}>
+                              {!dec ? (
+                                <Button
+                                  title="Decrypt"
+                                  onPress={() => decryptAppointment(item.id)}
+                                  disabled={busy}
+                                />
+                              ) : (
+                                <Button
+                                  title="Hide"
+                                  onPress={() => hideDecrypted(item.id)}
+                                  disabled={busy}
+                                />
+                              )}
+
+                              <View style={styles.spacer} />
+
+                              <Button
+                                title="Confirm"
+                                onPress={() => setAppointmentStatus(item.id, 'confirmed')}
+                                disabled={busy}
+                              />
+                              <View style={styles.spacer} />
+                              <Button
+                                title="Cancel"
+                                onPress={() => setAppointmentStatus(item.id, 'cancelled')}
+                                disabled={busy}
+                              />
+                            </View>
+                          </>
+                        );
+                      })()}
+                    </View>
+                  )}
+                />
               </View>
             )
           ) : showAppointments ? (
