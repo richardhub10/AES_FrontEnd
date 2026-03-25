@@ -152,6 +152,8 @@ export default function App() {
     try {
       const res = await api.get('/api/auth/me/');
       setMe(res.data);
+      // Default landing view per role (only on login/fetchMe).
+      setShowAppointments(!!res.data?.is_staff);
     } catch (e) {
       // Non-fatal
     }
@@ -255,22 +257,6 @@ export default function App() {
     fetchAppointments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
-
-  useEffect(() => {
-    // Always start on the form after login.
-    if (!token) return;
-    // Staff should land on the Appointment list to accept/confirm.
-    if (me?.is_staff) {
-      setShowAppointments(true);
-    } else {
-      setShowAppointments(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    if (!token) return;
-    if (me?.is_staff) setShowAppointments(true);
-  }, [token, me?.is_staff]);
 
   useEffect(() => {
     // If the selected day becomes invalid (weekend or fully booked), snap to earliest weekday.
@@ -390,16 +376,12 @@ export default function App() {
             <View style={styles.row}>
               <Button title="Refresh" onPress={fetchAppointments} disabled={busy} />
               <View style={styles.spacer} />
-              {!me?.is_staff && (
-                <>
-                  <Button
-                    title="Appointment"
-                    onPress={() => setShowAppointments((v) => !v)}
-                    disabled={busy}
-                  />
-                  <View style={styles.spacer} />
-                </>
-              )}
+              <Button
+                title="Appointment"
+                onPress={() => setShowAppointments((v) => !v)}
+                disabled={busy}
+              />
+              <View style={styles.spacer} />
               <Button title="Logout" onPress={logout} disabled={busy} />
             </View>
 
@@ -413,9 +395,122 @@ export default function App() {
             <View style={styles.card}>
               <Text style={styles.hint}>Loading account…</Text>
             </View>
-          ) : me?.is_staff || showAppointments ? (
+          ) : me?.is_staff ? (
+            showAppointments ? (
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>Appointments</Text>
+                <FlatList
+                  data={appointments}
+                  keyExtractor={(item) => String(item.id)}
+                  ListEmptyComponent={<Text style={styles.hint}>No appointments yet.</Text>}
+                  renderItem={({ item }) => (
+                    <View style={styles.item}>
+                      <Text style={styles.itemTitle}>{item.status}</Text>
+                      <Text style={styles.itemMeta}>
+                        Patient: {item.patient_full_name || '—'}
+                        {item.patient_age !== null && item.patient_age !== undefined
+                          ? ` (Age: ${item.patient_age})`
+                          : ''}
+                      </Text>
+                      <Text style={styles.itemMeta}>{item.scheduled_for}</Text>
+
+                      {(() => {
+                        const dec = decryptedById.get(item.id);
+                        const reasonText = dec ? dec.reason : item.reason;
+                        const notesText = dec ? dec.notes : item.notes;
+
+                        return (
+                          <>
+                            {!!reasonText && (
+                              <Text style={styles.itemBody}>
+                                Reason: {reasonText}
+                                {!dec ? ' (encrypted)' : ''}
+                              </Text>
+                            )}
+                            {!!notesText && (
+                              <Text style={styles.itemBody}>
+                                Notes: {notesText}
+                                {!dec ? ' (encrypted)' : ''}
+                              </Text>
+                            )}
+
+                            <View style={[styles.row, { marginTop: 8 }]}>
+                              {!dec ? (
+                                <Button
+                                  title="Decrypt"
+                                  onPress={() => decryptAppointment(item.id)}
+                                  disabled={busy}
+                                />
+                              ) : (
+                                <Button
+                                  title="Hide"
+                                  onPress={() => hideDecrypted(item.id)}
+                                  disabled={busy}
+                                />
+                              )}
+
+                              <View style={styles.spacer} />
+
+                              <Button
+                                title="Confirm"
+                                onPress={() => setAppointmentStatus(item.id, 'confirmed')}
+                                disabled={busy}
+                              />
+                              <View style={styles.spacer} />
+                              <Button
+                                title="Cancel"
+                                onPress={() => setAppointmentStatus(item.id, 'cancelled')}
+                                disabled={busy}
+                              />
+                            </View>
+                          </>
+                        );
+                      })()}
+                    </View>
+                  )}
+                />
+              </View>
+            ) : (
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>Schedule</Text>
+
+                <Text style={styles.label}>Scheduled For</Text>
+                {!!earliestAvailableYmd && (
+                  <Text style={styles.hint}>
+                    Earliest available appointment: {earliestAvailableYmd}
+                  </Text>
+                )}
+
+                <Calendar
+                  cursor={calendarCursor}
+                  onChangeCursor={setCalendarCursor}
+                  selectedDateYmd={selectedDateYmd}
+                  onSelectDateYmd={setSelectedDateYmd}
+                  bookedCountByDate={bookedCountByDate}
+                  dailyCapacity={DAILY_CAPACITY}
+                />
+
+                <Text style={styles.label}>Time (UTC)</Text>
+                <View style={styles.pickerWrap}>
+                  <Picker
+                    enabled={!busy}
+                    selectedValue={selectedTime}
+                    onValueChange={(v) => setSelectedTime(String(v))}
+                    style={styles.picker}
+                  >
+                    {timeOptions.map((opt) => (
+                      <Picker.Item key={opt.value} label={opt.label} value={opt.value} />
+                    ))}
+                  </Picker>
+                </View>
+                <Text style={styles.hint}>
+                  Selected: {selectedDateYmd} {selectedTime}
+                </Text>
+              </View>
+            )
+          ) : showAppointments ? (
             <View style={styles.card}>
-              <Text style={styles.sectionTitle}>{me?.is_staff ? 'Appointments' : 'My Appointments'}</Text>
+              <Text style={styles.sectionTitle}>My Appointments</Text>
               <FlatList
                 data={appointments}
                 keyExtractor={(item) => String(item.id)}
@@ -423,14 +518,6 @@ export default function App() {
                 renderItem={({ item }) => (
                   <View style={styles.item}>
                     <Text style={styles.itemTitle}>{item.status}</Text>
-                    {!!me?.is_staff && (
-                      <Text style={styles.itemMeta}>
-                        Patient: {item.patient_full_name || '—'}
-                        {item.patient_age !== null && item.patient_age !== undefined
-                          ? ` (Age: ${item.patient_age})`
-                          : ''}
-                      </Text>
-                    )}
                     <Text style={styles.itemMeta}>{item.scheduled_for}</Text>
 
                     {(() => {
@@ -470,27 +557,11 @@ export default function App() {
 
                             <View style={styles.spacer} />
 
-                            {me?.is_staff ? (
-                              <>
-                                <Button
-                                  title="Confirm"
-                                  onPress={() => setAppointmentStatus(item.id, 'confirmed')}
-                                  disabled={busy}
-                                />
-                                <View style={styles.spacer} />
-                                <Button
-                                  title="Cancel"
-                                  onPress={() => setAppointmentStatus(item.id, 'cancelled')}
-                                  disabled={busy}
-                                />
-                              </>
-                            ) : (
-                              <Button
-                                title="Cancel"
-                                onPress={() => setAppointmentStatus(item.id, 'cancelled')}
-                                disabled={busy}
-                              />
-                            )}
+                            <Button
+                              title="Cancel"
+                              onPress={() => setAppointmentStatus(item.id, 'cancelled')}
+                              disabled={busy}
+                            />
                           </View>
                         </>
                       );
@@ -502,12 +573,6 @@ export default function App() {
           ) : (
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>Create Appointment</Text>
-
-              {!!me?.is_staff && (
-                <Text style={styles.hint}>
-                  Staff accounts cannot create appointments. Use the Appointment list to confirm/cancel.
-                </Text>
-              )}
 
               <Text style={styles.label}>Scheduled For</Text>
               {!!earliestAvailableYmd && (
@@ -528,7 +593,7 @@ export default function App() {
               <Text style={styles.label}>Time (UTC)</Text>
               <View style={styles.pickerWrap}>
                 <Picker
-                  enabled={!busy && !me?.is_staff}
+                  enabled={!busy}
                   selectedValue={selectedTime}
                   onValueChange={(v) => setSelectedTime(String(v))}
                   style={styles.picker}
@@ -551,12 +616,7 @@ export default function App() {
               <Button
                 title="Create"
                 onPress={createAppointment}
-                disabled={
-                  busy ||
-                  !scheduledForIso ||
-                  isWeekendYmd(selectedDateYmd) ||
-                  !!me?.is_staff
-                }
+                disabled={busy || !scheduledForIso || isWeekendYmd(selectedDateYmd)}
               />
             </View>
           )}
