@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState } from 'react';
+import { Picker } from '@react-native-picker/picker';
 import {
   Button,
   FlatList,
@@ -21,9 +22,14 @@ export default function App() {
   const [mode, setMode] = useState('login'); // 'login' | 'register'
   const [showAppointments, setShowAppointments] = useState(false);
 
-  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
+
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [birthday, setBirthday] = useState(''); // YYYY-MM-DD
+  const [schoolId, setSchoolId] = useState('');
+  const [contactNumber, setContactNumber] = useState('');
 
   const [token, setToken] = useState(null);
   const [me, setMe] = useState(null);
@@ -46,7 +52,8 @@ export default function App() {
   const [selectedDateYmd, setSelectedDateYmd] = useState(() => {
     return new Date().toISOString().slice(0, 10);
   });
-  const [selectedTime, setSelectedTime] = useState('10:00');
+  const timeOptions = useMemo(() => buildTimeOptions(), []);
+  const [selectedTime, setSelectedTime] = useState(() => timeOptions[0]?.value || '07:00');
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -105,9 +112,13 @@ export default function App() {
     setError('');
     try {
       await api.post('/api/auth/register/', {
-        username,
-        password,
         email,
+        password,
+        first_name: firstName,
+        last_name: lastName,
+        birthday,
+        school_id: schoolId,
+        contact_number: contactNumber,
       });
       setMode('login');
       setError('Registered. Now log in.');
@@ -123,7 +134,7 @@ export default function App() {
     setError('');
     try {
       const res = await api.post('/api/auth/token/', {
-        username,
+        email,
         password,
       });
       setToken(res.data.access);
@@ -173,6 +184,11 @@ export default function App() {
   }
 
   async function createAppointment() {
+    if (me?.is_staff) {
+      setError('Staff accounts cannot create appointments.');
+      return;
+    }
+
     if (isWeekendYmd(selectedDateYmd)) {
       setError('Appointments cannot be created on Saturday or Sunday. Please choose a weekday.');
       return;
@@ -213,8 +229,19 @@ export default function App() {
 
   useEffect(() => {
     // Always start on the form after login.
-    if (token) setShowAppointments(false);
+    if (!token) return;
+    // Staff should land on the Appointment list to accept/confirm.
+    if (me?.is_staff) {
+      setShowAppointments(true);
+    } else {
+      setShowAppointments(false);
+    }
   }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    if (me?.is_staff) setShowAppointments(true);
+  }, [token, me?.is_staff]);
 
   useEffect(() => {
     // If the selected day becomes invalid (weekend or fully booked), snap to earliest weekday.
@@ -255,11 +282,12 @@ export default function App() {
             />
           </View>
 
-          <Text style={styles.label}>Username</Text>
+          <Text style={styles.label}>Email</Text>
           <TextInput
-            value={username}
-            onChangeText={setUsername}
+            value={email}
+            onChangeText={setEmail}
             autoCapitalize="none"
+            keyboardType="email-address"
             style={styles.input}
           />
 
@@ -273,11 +301,43 @@ export default function App() {
 
           {mode === 'register' && (
             <>
-              <Text style={styles.label}>Email (optional)</Text>
+              <Text style={styles.label}>First Name</Text>
               <TextInput
-                value={email}
-                onChangeText={setEmail}
+                value={firstName}
+                onChangeText={setFirstName}
+                style={styles.input}
+              />
+
+              <Text style={styles.label}>Last Name</Text>
+              <TextInput
+                value={lastName}
+                onChangeText={setLastName}
+                style={styles.input}
+              />
+
+              <Text style={styles.label}>Birthday (YYYY-MM-DD)</Text>
+              <TextInput
+                value={birthday}
+                onChangeText={setBirthday}
                 autoCapitalize="none"
+                style={styles.input}
+                placeholder="2000-01-31"
+              />
+
+              <Text style={styles.label}>School ID</Text>
+              <TextInput
+                value={schoolId}
+                onChangeText={setSchoolId}
+                autoCapitalize="characters"
+                style={styles.input}
+              />
+
+              <Text style={styles.label}>Contact Number</Text>
+              <TextInput
+                value={contactNumber}
+                onChangeText={setContactNumber}
+                autoCapitalize="none"
+                keyboardType={Platform.OS === 'web' ? 'tel' : 'phone-pad'}
                 style={styles.input}
               />
             </>
@@ -286,7 +346,13 @@ export default function App() {
           <Button
             title={mode === 'login' ? 'Login' : 'Create account'}
             onPress={mode === 'login' ? onLogin : onRegister}
-            disabled={busy || !username || !password}
+            disabled={
+              busy ||
+              !email ||
+              !password ||
+              (mode === 'register' &&
+                (!firstName || !lastName || !birthday || !schoolId || !contactNumber))
+            }
           />
         </View>
       ) : (
@@ -305,7 +371,7 @@ export default function App() {
             </View>
 
             <Text style={styles.hint}>
-              Logged in as: {me?.username || username}
+              Logged in as: {me?.email || email}
               {me?.is_staff ? ' (staff)' : ''}
             </Text>
           </View>
@@ -313,6 +379,12 @@ export default function App() {
           {!showAppointments ? (
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>Create Appointment</Text>
+
+              {!!me?.is_staff && (
+                <Text style={styles.hint}>
+                  Staff accounts cannot create appointments. Use the Appointment list to confirm/cancel.
+                </Text>
+              )}
 
               <Text style={styles.label}>Scheduled For</Text>
               {!!earliestAvailableYmd && (
@@ -331,14 +403,18 @@ export default function App() {
               />
 
               <Text style={styles.label}>Time (UTC)</Text>
-              <TextInput
-                value={selectedTime}
-                onChangeText={setSelectedTime}
-                autoCapitalize="none"
-                style={styles.input}
-                placeholder="10:00"
-                {...(Platform.OS === 'web' ? { type: 'time' } : null)}
-              />
+              <View style={styles.pickerWrap}>
+                <Picker
+                  enabled={!busy && !me?.is_staff}
+                  selectedValue={selectedTime}
+                  onValueChange={(v) => setSelectedTime(String(v))}
+                  style={styles.picker}
+                >
+                  {timeOptions.map((opt) => (
+                    <Picker.Item key={opt.value} label={opt.label} value={opt.value} />
+                  ))}
+                </Picker>
+              </View>
               <Text style={styles.hint}>
                 Selected: {selectedDateYmd} {selectedTime}
               </Text>
@@ -352,7 +428,12 @@ export default function App() {
               <Button
                 title="Create"
                 onPress={createAppointment}
-                disabled={busy || !scheduledForIso || isWeekendYmd(selectedDateYmd)}
+                disabled={
+                  busy ||
+                  !scheduledForIso ||
+                  isWeekendYmd(selectedDateYmd) ||
+                  !!me?.is_staff
+                }
               />
             </View>
           ) : (
@@ -420,6 +501,13 @@ function getErrorMessage(e) {
   }
 
   if (e?.response?.data) {
+    const detail =
+      typeof e.response.data === 'object' && e.response.data?.detail
+        ? String(e.response.data.detail)
+        : '';
+    if (detail.toLowerCase().includes('no active account')) {
+      return 'Incorrect email or password.';
+    }
     if (typeof e.response.data === 'string') return e.response.data;
     return JSON.stringify(e.response.data);
   }
@@ -492,7 +580,8 @@ function Calendar({
             const ymd = cell.ymd;
             const status = statusForYmd(ymd);
             const isSelected = ymd === selectedDateYmd;
-            const disabled = status === 'full' || isWeekend(ymd);
+            const weekend = isWeekend(ymd);
+            const disabled = status === 'full' || weekend;
 
             return (
               <Pressable
@@ -501,13 +590,19 @@ function Calendar({
                 onPress={() => onSelectDateYmd(ymd)}
                 style={({ pressed }) => [
                   styles.calendarDay,
-                  status === 'available' ? styles.calendarDayAvailable : styles.calendarDayFull,
+                  weekend
+                    ? styles.calendarDayWeekend
+                    : status === 'available'
+                      ? styles.calendarDayAvailable
+                      : styles.calendarDayFull,
                   isSelected ? styles.calendarDaySelected : null,
-                  disabled ? styles.calendarDayDisabled : null,
+                  disabled && !weekend ? styles.calendarDayDisabled : null,
                   pressed ? styles.calendarDayPressed : null,
                 ]}
               >
-                <Text style={styles.calendarDayText}>{cell.day}</Text>
+                <Text style={weekend ? styles.calendarDayWeekendText : styles.calendarDayText}>
+                  {cell.day}
+                </Text>
               </Pressable>
             );
           })}
@@ -554,6 +649,25 @@ function buildCalendarWeeksUtc(year, monthIndex) {
   return weeks;
 }
 
+function buildTimeOptions() {
+  // Hourly slots from 07:00 to 16:00 inclusive (UTC).
+  const options = [];
+  for (let hour = 7; hour <= 16; hour++) {
+    const value = `${String(hour).padStart(2, '0')}:00`;
+    options.push({ value, label: formatTimeLabel(value) });
+  }
+  return options;
+}
+
+function formatTimeLabel(hhmm) {
+  const [hhStr, mm] = String(hhmm).split(':');
+  const hh = Number(hhStr);
+  if (!Number.isFinite(hh)) return hhmm;
+  const ampm = hh >= 12 ? 'PM' : 'AM';
+  const hour12 = ((hh + 11) % 12) + 1;
+  return `${hour12}:${mm || '00'} ${ampm}`;
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -589,6 +703,15 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     paddingVertical: 8,
     paddingHorizontal: 10,
+  },
+  pickerWrap: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  picker: {
+    height: 44,
   },
   hint: {
     marginTop: 6,
@@ -698,6 +821,13 @@ const styles = StyleSheet.create({
   },
   calendarDayText: {
     fontWeight: '700',
+  },
+  calendarDayWeekend: {
+    backgroundColor: 'transparent',
+  },
+  calendarDayWeekendText: {
+    fontWeight: '700',
+    color: '#666',
   },
   calendarLegendRow: {
     flexDirection: 'row',
