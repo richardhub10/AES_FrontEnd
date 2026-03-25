@@ -365,6 +365,9 @@ export default function App() {
                 renderItem={({ item }) => (
                   <View style={styles.item}>
                     <Text style={styles.itemTitle}>{item.status}</Text>
+                    {!!me?.is_staff && !!item.patient_username && (
+                      <Text style={styles.itemMeta}>Patient: {item.patient_username}</Text>
+                    )}
                     <Text style={styles.itemMeta}>{item.scheduled_for}</Text>
                     {!!item.reason && <Text style={styles.itemBody}>Reason: {item.reason}</Text>}
                     {!!item.notes && <Text style={styles.itemBody}>Notes: {item.notes}</Text>}
