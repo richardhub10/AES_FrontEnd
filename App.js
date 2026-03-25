@@ -288,67 +288,69 @@ export default function App() {
               Logged in as: {me?.username || username}
               {me?.is_staff ? ' (staff)' : ''}
             </Text>
+          </View>
 
-            <Text style={styles.sectionTitle}>Create Appointment</Text>
+          {!showAppointments ? (
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Create Appointment</Text>
 
-            <Text style={styles.label}>Scheduled For</Text>
-            {!!earliestAvailableYmd && (
+              <Text style={styles.label}>Scheduled For</Text>
+              {!!earliestAvailableYmd && (
+                <Text style={styles.hint}>
+                  Earliest available appointment: {earliestAvailableYmd}
+                </Text>
+              )}
+
+              <Calendar
+                cursor={calendarCursor}
+                onChangeCursor={setCalendarCursor}
+                selectedDateYmd={selectedDateYmd}
+                onSelectDateYmd={setSelectedDateYmd}
+                bookedCountByDate={bookedCountByDate}
+                dailyCapacity={DAILY_CAPACITY}
+              />
+
+              <Text style={styles.label}>Time (UTC)</Text>
+              <TextInput
+                value={selectedTime}
+                onChangeText={setSelectedTime}
+                autoCapitalize="none"
+                style={styles.input}
+                placeholder="10:00"
+                {...(Platform.OS === 'web' ? { type: 'time' } : null)}
+              />
               <Text style={styles.hint}>
-                Earliest available appointment: {earliestAvailableYmd}
+                Selected: {selectedDateYmd} {selectedTime}
               </Text>
-            )}
 
-            {!showAppointments ? (
-              <View style={styles.card}>
-                <Text style={styles.hint}>
-                  Logged in as: {me?.username || username}
-                  {me?.is_staff ? ' (staff)' : ''}
-                </Text>
+              <Text style={styles.label}>Reason</Text>
+              <TextInput value={reason} onChangeText={setReason} style={styles.input} />
 
-                <Text style={styles.sectionTitle}>Create Appointment</Text>
+              <Text style={styles.label}>Notes</Text>
+              <TextInput value={notes} onChangeText={setNotes} style={styles.input} />
 
-                <Text style={styles.label}>Scheduled For</Text>
-                {!!earliestAvailableYmd && (
-                  <Text style={styles.hint}>
-                    Earliest available appointment: {earliestAvailableYmd}
-                  </Text>
-                )}
+              <Button
+                title="Create"
+                onPress={createAppointment}
+                disabled={busy || !scheduledForIso}
+              />
+            </View>
+          ) : (
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>My Appointments</Text>
+              <FlatList
+                data={appointments}
+                keyExtractor={(item) => String(item.id)}
+                ListEmptyComponent={<Text style={styles.hint}>No appointments yet.</Text>}
+                renderItem={({ item }) => (
+                  <View style={styles.item}>
+                    <Text style={styles.itemTitle}>{item.status}</Text>
+                    <Text style={styles.itemMeta}>{item.scheduled_for}</Text>
+                    {!!item.reason && <Text style={styles.itemBody}>Reason: {item.reason}</Text>}
+                    {!!item.notes && <Text style={styles.itemBody}>Notes: {item.notes}</Text>}
 
-                <Calendar
-                  cursor={calendarCursor}
-                  onChangeCursor={setCalendarCursor}
-                  selectedDateYmd={selectedDateYmd}
-                  onSelectDateYmd={setSelectedDateYmd}
-                  bookedCountByDate={bookedCountByDate}
-                  dailyCapacity={DAILY_CAPACITY}
-                />
-
-                <Text style={styles.label}>Time (UTC)</Text>
-                <TextInput
-                  value={selectedTime}
-                  onChangeText={setSelectedTime}
-                  autoCapitalize="none"
-                  style={styles.input}
-                  placeholder="10:00"
-                  {...(Platform.OS === 'web' ? { type: 'time' } : null)}
-                />
-                <Text style={styles.hint}>
-                  Selected: {selectedDateYmd} {selectedTime}
-                </Text>
-
-                <Text style={styles.label}>Reason</Text>
-                <TextInput value={reason} onChangeText={setReason} style={styles.input} />
-
-                <Text style={styles.label}>Notes</Text>
-                <TextInput value={notes} onChangeText={setNotes} style={styles.input} />
-
-                <Button
-                  title="Create"
-                  onPress={createAppointment}
-                  disabled={busy || !scheduledForIso}
-                />
-              </View>
-            ) : (
+                    <View style={[styles.row, { marginTop: 8 }]}>
+                      {me?.is_staff ? (
                         <>
                           <Button
                             title="Confirm"
