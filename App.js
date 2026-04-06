@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { StatusBar } from 'expo-status-bar';
+import { jsPDF } from 'jspdf';
 import { useEffect, useMemo, useState } from 'react';
 import { Picker } from '@react-native-picker/picker';
 import {
@@ -29,6 +30,64 @@ function joinUrl(base, path) {
   const b = String(base || '').replace(/\/+$/, '');
   const p = String(path || '').startsWith('/') ? String(path || '') : `/${path}`;
   return `${b}${p}`;
+}
+
+function formatIsoForSticker(iso) {
+  if (!iso || typeof iso !== 'string') return '—';
+  // Keep it simple and consistent with backend: show UTC.
+  // Example: 2026-04-07T07:00:00Z -> 2026-04-07 07:00 UTC
+  const ymd = iso.slice(0, 10);
+  const hhmm = iso.length >= 16 ? iso.slice(11, 16) : '';
+  if (!ymd || !hhmm) return iso;
+  return `${ymd} ${hhmm} UTC`;
+}
+
+function downloadAppointmentStickerPdf({
+  fullName,
+  scheduledForIso,
+  reason,
+  notes,
+}) {
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 48;
+  const boxX = margin;
+  const boxY = margin;
+  const boxW = pageWidth - margin * 2;
+  const boxH = 320;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.text('University Clinic Appointment', boxX + 16, boxY + 28);
+
+  doc.setDrawColor(209, 213, 219);
+  doc.setLineWidth(1);
+  doc.roundedRect(boxX, boxY + 44, boxW, boxH, 10, 10);
+
+  const labelX = boxX + 16;
+  const valueX = boxX + 160;
+  let y = boxY + 80;
+
+  function row(label, value) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text(label, labelX, y);
+    doc.setFont('helvetica', 'normal');
+    const text = String(value || '—');
+    const lines = doc.splitTextToSize(text, boxW - (valueX - boxX) - 16);
+    doc.text(lines, valueX, y);
+    y += Math.max(18, lines.length * 14) + 6;
+  }
+
+  row('Full Name', fullName);
+  row('Time', formatIsoForSticker(scheduledForIso));
+  row('Reason', reason);
+  row('Notes', notes || '—');
+
+  const safeName = String(fullName || 'appointment').replace(/[^a-z0-9_-]+/gi, '_');
+  const safeDate = String(scheduledForIso || '').slice(0, 10) || 'date';
+  doc.save(`UA-Clinic-Appointment-${safeName}-${safeDate}.pdf`);
 }
 
 const THEME = {
@@ -464,6 +523,51 @@ export default function App() {
           notes: res.data?.notes || '',
         });
         return next;
+      });
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function downloadStickerForAppointment(appt) {
+    if (!appt?.id) return;
+
+    // Prefer plaintext (decrypt endpoint). If it fails, fall back to whatever we have.
+    setBusy(true);
+    setError('');
+    try {
+      let reasonPlain = '';
+      let notesPlain = '';
+
+      const cached = decryptedById.get(appt.id);
+      if (cached) {
+        reasonPlain = cached.reason || '';
+        notesPlain = cached.notes || '';
+      } else {
+        const res = await api.get(`/api/appointments/${appt.id}/decrypt/`);
+        reasonPlain = res.data?.reason || '';
+        notesPlain = res.data?.notes || '';
+        setDecryptedById((prev) => {
+          const next = new Map(prev);
+          next.set(appt.id, { reason: reasonPlain, notes: notesPlain });
+          return next;
+        });
+      }
+
+      const fullName =
+        appt?.patient_full_name ||
+        `${me?.first_name || ''} ${me?.last_name || ''}`.trim() ||
+        me?.email ||
+        appt?.patient_username ||
+        '—';
+
+      downloadAppointmentStickerPdf({
+        fullName,
+        scheduledForIso: appt?.scheduled_for || '',
+        reason: reasonPlain || '(not provided)',
+        notes: notesPlain || '',
       });
     } catch (e) {
       setError(getErrorMessage(e));
@@ -1108,6 +1212,7 @@ export default function App() {
                       const dec = decryptedById.get(item.id);
                       const reasonText = dec ? dec.reason : item.reason;
                       const notesText = dec ? dec.notes : item.notes;
+                      const isConfirmed = String(item.status || '').toLowerCase() === 'confirmed';
 
                       return (
                         <>
@@ -1142,6 +1247,17 @@ export default function App() {
                                 />
                               )}
                             </View>
+
+                            {isConfirmed ? (
+                              <View style={styles.actionBtn}>
+                                <UiButton
+                                  title="Download PDF"
+                                  onPress={() => downloadStickerForAppointment(item)}
+                                  disabled={busy}
+                                  variant="primary"
+                                />
+                              </View>
+                            ) : null}
 
                             <View style={styles.actionBtn}>
                               <UiButton
