@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState } from 'react';
 import { Picker } from '@react-native-picker/picker';
 import {
+  Animated,
   Button,
   FlatList,
   Platform,
@@ -18,6 +19,145 @@ import {
 const API_BASE_URL =
   (typeof process !== 'undefined' && process?.env?.EXPO_PUBLIC_API_BASE_URL) ||
   'https://aes-back.onrender.com';
+
+const THEME = {
+  colors: {
+    bg: '#f7f8fa',
+    surface: '#ffffff',
+    text: '#111827',
+    muted: '#6b7280',
+    border: '#e5e7eb',
+    borderStrong: '#d1d5db',
+    primary: '#1f2937',
+    primaryText: '#ffffff',
+    dangerBg: '#fdecea',
+    dangerBorder: '#f5c2c0',
+    dangerText: '#8a1f17',
+    successBg: '#e6f7e6',
+    successText: '#14532d',
+  },
+  radius: {
+    sm: 10,
+    md: 14,
+  },
+};
+
+function UiButton({
+  title,
+  onPress,
+  disabled,
+  variant = 'primary',
+  style,
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [
+        styles.btn,
+        variant === 'primary' ? styles.btnPrimary : null,
+        variant === 'secondary' ? styles.btnSecondary : null,
+        variant === 'ghost' ? styles.btnGhost : null,
+        disabled ? styles.btnDisabled : null,
+        pressed && !disabled ? styles.btnPressed : null,
+        style,
+      ]}
+    >
+      <Text
+        style={[
+          styles.btnText,
+          variant === 'primary' ? styles.btnTextPrimary : null,
+          variant !== 'primary' ? styles.btnTextSecondary : null,
+          disabled ? styles.btnTextDisabled : null,
+        ]}
+      >
+        {title}
+      </Text>
+    </Pressable>
+  );
+}
+
+function FadeSlideIn({ children, style }) {
+  const opacity = useMemo(() => new Animated.Value(0), []);
+  const translateY = useMemo(() => new Animated.Value(10), []);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [opacity, translateY]);
+
+  return (
+    <Animated.View
+      style={[
+        { opacity, transform: [{ translateY }] },
+        style,
+      ]}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
+function Field({ label, children, hint }) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.label}>{label}</Text>
+      {children}
+      {!!hint && <Text style={styles.hint}>{hint}</Text>}
+    </View>
+  );
+}
+
+function AccountDetails({ me, emailFallback }) {
+  const isStaff = !!me?.is_staff;
+  const fullName = `${me?.first_name || ''} ${me?.last_name || ''}`.trim();
+  const header = fullName || me?.email || emailFallback || 'Account';
+  return (
+    <View style={styles.accountCard}>
+      <View style={styles.accountHeaderRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.accountTitle}>{header}</Text>
+          <Text style={styles.accountSub}>{isStaff ? 'Staff' : 'Student'}</Text>
+        </View>
+        <View style={[styles.badge, isStaff ? styles.badgeStaff : styles.badgeStudent]}>
+          <Text style={[styles.badgeText, isStaff ? styles.badgeTextStaff : styles.badgeTextStudent]}>
+            {isStaff ? 'STAFF' : 'STUDENT'}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.accountGrid}>
+        <View style={styles.accountCell}>
+          <Text style={styles.accountLabel}>Email</Text>
+          <Text style={styles.accountValue}>{me?.email || emailFallback || '—'}</Text>
+        </View>
+        <View style={styles.accountCell}>
+          <Text style={styles.accountLabel}>Username</Text>
+          <Text style={styles.accountValue}>{me?.username || '—'}</Text>
+        </View>
+        <View style={styles.accountCell}>
+          <Text style={styles.accountLabel}>School ID</Text>
+          <Text style={styles.accountValue}>{me?.school_id || '—'}</Text>
+        </View>
+        <View style={styles.accountCell}>
+          <Text style={styles.accountLabel}>Contact</Text>
+          <Text style={styles.accountValue}>{me?.contact_number || '—'}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
 
 export default function App() {
   const [mode, setMode] = useState('login'); // 'login' | 'register'
@@ -309,6 +449,10 @@ export default function App() {
     }
   }, [token, earliestAvailableYmd, bookedCountByDate, selectedDateYmd, DAILY_CAPACITY]);
 
+  const screenKey = !token
+    ? `auth:${mode}`
+    : `app:${me?.is_staff ? 'staff' : 'student'}:${showAppointments ? 'list' : 'create'}`;
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -317,7 +461,8 @@ export default function App() {
         keyboardShouldPersistTaps="handled"
       >
       <View style={styles.header}>
-        <Text style={styles.title}>UA Clinic Appointment System</Text>
+        <Text style={styles.title}>University of the Assumption Clinic</Text>
+        <Text style={styles.subtitle}>Appointment System</Text>
       </View>
 
       {!!error && (
@@ -326,115 +471,146 @@ export default function App() {
         </View>
       )}
 
+      <FadeSlideIn key={screenKey} style={styles.screenWrap}>
       {!token ? (
         <View style={styles.card}>
-          <View style={styles.row}>
-            <Button
+          <View style={styles.segmentRow}>
+            <UiButton
               title="Login"
               onPress={() => setMode('login')}
               disabled={busy}
+              variant={mode === 'login' ? 'primary' : 'secondary'}
+              style={styles.segmentBtn}
             />
-            <View style={styles.spacer} />
-            <Button
+            <UiButton
               title="Register"
               onPress={() => setMode('register')}
               disabled={busy}
+              variant={mode === 'register' ? 'primary' : 'secondary'}
+              style={styles.segmentBtn}
             />
           </View>
 
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            style={styles.input}
-          />
+          <Field label="Email">
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              style={styles.input}
+              placeholder="you@ua.edu.ph"
+              placeholderTextColor={THEME.colors.muted}
+            />
+          </Field>
 
-          <Text style={styles.label}>Password</Text>
-          <TextInput
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            style={styles.input}
-          />
+          <Field label="Password">
+            <TextInput
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              style={styles.input}
+              placeholder="••••••••"
+              placeholderTextColor={THEME.colors.muted}
+            />
+          </Field>
 
           {mode === 'register' && (
             <>
-              <Text style={styles.label}>First Name</Text>
-              <TextInput
-                value={firstName}
-                onChangeText={setFirstName}
-                style={styles.input}
-              />
+              <View style={styles.grid2}>
+                <View style={styles.gridCol}>
+                  <Field label="First Name">
+                    <TextInput
+                      value={firstName}
+                      onChangeText={setFirstName}
+                      style={styles.input}
+                      placeholder="First name"
+                      placeholderTextColor={THEME.colors.muted}
+                    />
+                  </Field>
+                </View>
+                <View style={styles.gridCol}>
+                  <Field label="Last Name">
+                    <TextInput
+                      value={lastName}
+                      onChangeText={setLastName}
+                      style={styles.input}
+                      placeholder="Last name"
+                      placeholderTextColor={THEME.colors.muted}
+                    />
+                  </Field>
+                </View>
+              </View>
 
-              <Text style={styles.label}>Last Name</Text>
-              <TextInput
-                value={lastName}
-                onChangeText={setLastName}
-                style={styles.input}
-              />
+              <View style={styles.grid2}>
+                <View style={styles.gridCol}>
+                  <Field label="Birthday" hint="Format: YYYY-MM-DD">
+                    <TextInput
+                      value={birthday}
+                      onChangeText={setBirthday}
+                      autoCapitalize="none"
+                      style={styles.input}
+                      placeholder="2000-01-31"
+                      placeholderTextColor={THEME.colors.muted}
+                    />
+                  </Field>
+                </View>
+                <View style={styles.gridCol}>
+                  <Field label="School ID">
+                    <TextInput
+                      value={schoolId}
+                      onChangeText={setSchoolId}
+                      autoCapitalize="characters"
+                      style={styles.input}
+                      placeholder="UA-XXXXXX"
+                      placeholderTextColor={THEME.colors.muted}
+                    />
+                  </Field>
+                </View>
+              </View>
 
-              <Text style={styles.label}>Birthday (YYYY-MM-DD)</Text>
-              <TextInput
-                value={birthday}
-                onChangeText={setBirthday}
-                autoCapitalize="none"
-                style={styles.input}
-                placeholder="2000-01-31"
-              />
-
-              <Text style={styles.label}>School ID</Text>
-              <TextInput
-                value={schoolId}
-                onChangeText={setSchoolId}
-                autoCapitalize="characters"
-                style={styles.input}
-              />
-
-              <Text style={styles.label}>Contact Number</Text>
-              <TextInput
-                value={contactNumber}
-                onChangeText={setContactNumber}
-                autoCapitalize="none"
-                keyboardType={Platform.OS === 'web' ? 'tel' : 'phone-pad'}
-                style={styles.input}
-              />
+              <Field label="Contact Number">
+                <TextInput
+                  value={contactNumber}
+                  onChangeText={setContactNumber}
+                  autoCapitalize="none"
+                  keyboardType={Platform.OS === 'web' ? 'tel' : 'phone-pad'}
+                  style={styles.input}
+                  placeholder="09xxxxxxxxx"
+                  placeholderTextColor={THEME.colors.muted}
+                />
+              </Field>
             </>
           )}
 
-          <Button
-            title={mode === 'login' ? 'Login' : 'Create account'}
-            onPress={mode === 'login' ? onLogin : onRegister}
-            disabled={
-              busy ||
-              !email ||
-              !password ||
-              (mode === 'register' &&
-                (!firstName || !lastName || !birthday || !schoolId || !contactNumber))
-            }
-          />
+          <View style={styles.formActions}>
+            <UiButton
+              title={mode === 'login' ? 'Sign in' : 'Create account'}
+              onPress={mode === 'login' ? onLogin : onRegister}
+              disabled={
+                busy ||
+                !email ||
+                !password ||
+                (mode === 'register' &&
+                  (!firstName || !lastName || !birthday || !schoolId || !contactNumber))
+              }
+              variant="primary"
+            />
+          </View>
         </View>
       ) : (
         <>
-          <View style={styles.card}>
-            <View style={styles.row}>
-              <Button title="Refresh" onPress={fetchAppointments} disabled={busy} />
-              <View style={styles.spacer} />
-              <Button
-                title="Appointment"
-                onPress={() => setShowAppointments((v) => !v)}
-                disabled={busy}
-              />
-              <View style={styles.spacer} />
-              <Button title="Logout" onPress={logout} disabled={busy} />
-            </View>
-
-            <Text style={styles.hint}>
-              Logged in as: {me?.email || email}
-              {me?.is_staff ? ' (staff)' : ''}
-            </Text>
+          <View style={styles.topBar}>
+            <UiButton title="Refresh" onPress={fetchAppointments} disabled={busy} variant="secondary" />
+            <UiButton
+              title={me?.is_staff ? (showAppointments ? 'Schedule' : 'Appointments') : (showAppointments ? 'Create' : 'My Appointments')}
+              onPress={() => setShowAppointments((v) => !v)}
+              disabled={busy}
+              variant="primary"
+            />
+            <UiButton title="Logout" onPress={logout} disabled={busy} variant="ghost" />
           </View>
+
+          <AccountDetails me={me} emailFallback={email} />
 
           {!!token && !me ? (
             <View style={styles.card}>
@@ -451,7 +627,21 @@ export default function App() {
                   ListEmptyComponent={<Text style={styles.hint}>No pending appointments.</Text>}
                   renderItem={({ item }) => (
                     <View style={styles.item}>
-                      <Text style={styles.itemTitle}>{item.status}</Text>
+                      <View style={styles.itemHeaderRow}>
+                        <Text style={styles.itemTitle}>{String(item.status || '').toUpperCase()}</Text>
+                        <View
+                          style={[
+                            styles.pill,
+                            String(item.status || '').toLowerCase() === 'confirmed'
+                              ? styles.pillSuccess
+                              : String(item.status || '').toLowerCase() === 'cancelled'
+                                ? styles.pillDanger
+                                : styles.pillNeutral,
+                          ]}
+                        >
+                          <Text style={styles.pillText}>{String(item.status || '').toUpperCase()}</Text>
+                        </View>
+                      </View>
                       <Text style={styles.itemMeta}>
                         Patient: {item.patient_full_name || '—'}
                         {item.patient_age !== null && item.patient_age !== undefined
@@ -483,33 +673,37 @@ export default function App() {
                             <View style={styles.actionRow}>
                               <View style={styles.actionBtn}>
                                 {!dec ? (
-                                  <Button
+                                  <UiButton
                                     title="Decrypt"
                                     onPress={() => decryptAppointment(item.id)}
                                     disabled={busy}
+                                    variant="secondary"
                                   />
                                 ) : (
-                                  <Button
+                                  <UiButton
                                     title="Hide"
                                     onPress={() => hideDecrypted(item.id)}
                                     disabled={busy}
+                                    variant="ghost"
                                   />
                                 )}
                               </View>
 
                               <View style={styles.actionBtn}>
-                                <Button
+                                <UiButton
                                   title="Confirm"
                                   onPress={() => setAppointmentStatus(item.id, 'confirmed')}
                                   disabled={busy}
+                                  variant="primary"
                                 />
                               </View>
 
                               <View style={styles.actionBtn}>
-                                <Button
+                                <UiButton
                                   title="Cancel"
                                   onPress={() => setAppointmentStatus(item.id, 'cancelled')}
                                   disabled={busy}
+                                  variant="secondary"
                                 />
                               </View>
                             </View>
@@ -567,7 +761,21 @@ export default function App() {
                   ListEmptyComponent={<Text style={styles.hint}>No confirmed appointments for this date.</Text>}
                   renderItem={({ item }) => (
                     <View style={styles.item}>
-                      <Text style={styles.itemTitle}>{item.status}</Text>
+                      <View style={styles.itemHeaderRow}>
+                        <Text style={styles.itemTitle}>{String(item.status || '').toUpperCase()}</Text>
+                        <View
+                          style={[
+                            styles.pill,
+                            String(item.status || '').toLowerCase() === 'confirmed'
+                              ? styles.pillSuccess
+                              : String(item.status || '').toLowerCase() === 'cancelled'
+                                ? styles.pillDanger
+                                : styles.pillNeutral,
+                          ]}
+                        >
+                          <Text style={styles.pillText}>{String(item.status || '').toUpperCase()}</Text>
+                        </View>
+                      </View>
                       <Text style={styles.itemMeta}>
                         Patient: {item.patient_full_name || '—'}
                         {item.patient_age !== null && item.patient_age !== undefined
@@ -599,25 +807,28 @@ export default function App() {
                             <View style={styles.actionRow}>
                               <View style={styles.actionBtn}>
                                 {!dec ? (
-                                  <Button
+                                  <UiButton
                                     title="Decrypt"
                                     onPress={() => decryptAppointment(item.id)}
                                     disabled={busy}
+                                    variant="secondary"
                                   />
                                 ) : (
-                                  <Button
+                                  <UiButton
                                     title="Hide"
                                     onPress={() => hideDecrypted(item.id)}
                                     disabled={busy}
+                                    variant="ghost"
                                   />
                                 )}
                               </View>
 
                               <View style={styles.actionBtn}>
-                                <Button
+                                <UiButton
                                   title="Cancel"
                                   onPress={() => setAppointmentStatus(item.id, 'cancelled')}
                                   disabled={busy}
+                                  variant="secondary"
                                 />
                               </View>
                             </View>
@@ -639,7 +850,21 @@ export default function App() {
                 ListEmptyComponent={<Text style={styles.hint}>No appointments yet.</Text>}
                 renderItem={({ item }) => (
                   <View style={styles.item}>
-                    <Text style={styles.itemTitle}>{item.status}</Text>
+                    <View style={styles.itemHeaderRow}>
+                      <Text style={styles.itemTitle}>{String(item.status || '').toUpperCase()}</Text>
+                      <View
+                        style={[
+                          styles.pill,
+                          String(item.status || '').toLowerCase() === 'confirmed'
+                            ? styles.pillSuccess
+                            : String(item.status || '').toLowerCase() === 'cancelled'
+                              ? styles.pillDanger
+                              : styles.pillNeutral,
+                        ]}
+                      >
+                        <Text style={styles.pillText}>{String(item.status || '').toUpperCase()}</Text>
+                      </View>
+                    </View>
                     <Text style={styles.itemMeta}>{item.scheduled_for}</Text>
 
                     {(() => {
@@ -665,25 +890,28 @@ export default function App() {
                           <View style={styles.actionRow}>
                             <View style={styles.actionBtn}>
                               {!dec ? (
-                                <Button
+                                <UiButton
                                   title="Decrypt"
                                   onPress={() => decryptAppointment(item.id)}
                                   disabled={busy}
+                                  variant="secondary"
                                 />
                               ) : (
-                                <Button
+                                <UiButton
                                   title="Hide"
                                   onPress={() => hideDecrypted(item.id)}
                                   disabled={busy}
+                                  variant="ghost"
                                 />
                               )}
                             </View>
 
                             <View style={styles.actionBtn}>
-                              <Button
+                              <UiButton
                                 title="Cancel"
                                 onPress={() => setAppointmentStatus(item.id, 'cancelled')}
                                 disabled={busy}
+                                variant="secondary"
                               />
                             </View>
                           </View>
@@ -737,16 +965,18 @@ export default function App() {
               <Text style={styles.label}>Notes</Text>
               <TextInput value={notes} onChangeText={setNotes} style={styles.input} />
 
-              <Button
+              <UiButton
                 title="Create"
                 onPress={createAppointment}
                 disabled={busy || !scheduledForIso || isWeekendYmd(selectedDateYmd)}
+                variant="primary"
               />
             </View>
           )}
         </>
       )}
 
+      </FadeSlideIn>
       </ScrollView>
       <StatusBar style="auto" />
     </SafeAreaView>
@@ -819,11 +1049,11 @@ function Calendar({
   return (
     <View style={styles.calendarCard}>
       <View style={styles.calendarHeaderRow}>
-        <Button title="<" onPress={prevMonth} />
+        <UiButton title="<" onPress={prevMonth} variant="ghost" style={styles.calendarNavBtn} />
         <Text style={styles.calendarTitle}>
           {monthName} {year}
         </Text>
-        <Button title=">" onPress={nextMonth} />
+        <UiButton title=">" onPress={nextMonth} variant="ghost" style={styles.calendarNavBtn} />
       </View>
 
       <View style={styles.calendarWeekdaysRow}>
@@ -935,58 +1165,97 @@ function formatTimeLabel(hhmm) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: THEME.colors.bg,
   },
   scroll: {
     flex: 1,
   },
   container: {
     flexGrow: 1,
-    padding: 16,
-    backgroundColor: '#fff',
+    padding: 18,
+    backgroundColor: THEME.colors.bg,
+    width: '100%',
+    maxWidth: 980,
+    alignSelf: 'center',
   },
   header: {
-    marginBottom: 8,
+    marginBottom: 10,
+    paddingTop: 4,
   },
   title: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 24,
+    fontWeight: '800',
+    color: THEME.colors.text,
+    letterSpacing: 0.2,
   },
   subtitle: {
     marginTop: 4,
-    color: '#444',
+    color: THEME.colors.muted,
+    fontWeight: '600',
+  },
+  screenWrap: {
+    width: '100%',
   },
   card: {
     borderWidth: 1,
-    borderColor: '#e5e5e5',
-    borderRadius: 8,
-    padding: 12,
+    borderColor: THEME.colors.border,
+    borderRadius: THEME.radius.md,
+    padding: 14,
+    marginTop: 12,
+    backgroundColor: THEME.colors.surface,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 2,
+  },
+  topBar: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  segmentRow: {
+    flexDirection: 'row',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  segmentBtn: {
+    flexGrow: 1,
+    minWidth: 160,
+  },
+  field: {
     marginTop: 12,
   },
   label: {
-    marginTop: 10,
     marginBottom: 4,
-    fontWeight: '600',
+    fontWeight: '700',
+    color: THEME.colors.text,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    borderColor: THEME.colors.borderStrong,
+    borderRadius: THEME.radius.sm,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: THEME.colors.surface,
+    color: THEME.colors.text,
   },
   pickerWrap: {
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 6,
+    borderColor: THEME.colors.borderStrong,
+    borderRadius: THEME.radius.sm,
     overflow: 'hidden',
+    backgroundColor: THEME.colors.surface,
   },
   picker: {
     height: 44,
   },
   hint: {
     marginTop: 6,
-    color: '#666',
+    color: THEME.colors.muted,
   },
   row: {
     flexDirection: 'row',
@@ -1013,42 +1282,201 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     fontSize: 16,
     fontWeight: '700',
+    color: THEME.colors.text,
   },
   item: {
     borderTopWidth: 1,
-    borderTopColor: '#eee',
+    borderTopColor: THEME.colors.border,
     paddingVertical: 10,
+  },
+  itemHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
   },
   itemTitle: {
     fontWeight: '700',
+    color: THEME.colors.text,
   },
   itemMeta: {
-    color: '#666',
+    color: THEME.colors.muted,
     marginTop: 2,
     flexShrink: 1,
   },
   itemBody: {
     marginTop: 4,
     flexShrink: 1,
+    color: THEME.colors.text,
   },
   errorBox: {
     marginTop: 8,
     padding: 10,
-    borderRadius: 6,
-    backgroundColor: '#fdecea',
+    borderRadius: THEME.radius.sm,
+    backgroundColor: THEME.colors.dangerBg,
     borderWidth: 1,
-    borderColor: '#f5c2c0',
+    borderColor: THEME.colors.dangerBorder,
   },
   errorText: {
-    color: '#8a1f17',
+    color: THEME.colors.dangerText,
+  },
+
+  btn: {
+    borderRadius: THEME.radius.sm,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: THEME.colors.borderStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 42,
+  },
+  btnPrimary: {
+    backgroundColor: THEME.colors.primary,
+    borderColor: THEME.colors.primary,
+  },
+  btnSecondary: {
+    backgroundColor: THEME.colors.surface,
+  },
+  btnGhost: {
+    backgroundColor: 'transparent',
+  },
+  btnDisabled: {
+    opacity: 0.55,
+  },
+  btnPressed: {
+    opacity: 0.9,
+  },
+  btnText: {
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  btnTextPrimary: {
+    color: THEME.colors.primaryText,
+  },
+  btnTextSecondary: {
+    color: THEME.colors.text,
+  },
+  btnTextDisabled: {
+    color: THEME.colors.muted,
+  },
+  formActions: {
+    marginTop: 14,
+  },
+  grid2: {
+    flexDirection: 'row',
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  gridCol: {
+    flexGrow: 1,
+    minWidth: 240,
+  },
+
+  accountCard: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    borderRadius: THEME.radius.md,
+    padding: 14,
+    backgroundColor: THEME.colors.surface,
+  },
+  accountHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  accountTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: THEME.colors.text,
+  },
+  accountSub: {
+    marginTop: 2,
+    color: THEME.colors.muted,
+    fontWeight: '700',
+  },
+  accountGrid: {
+    marginTop: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  accountCell: {
+    minWidth: 220,
+    flexGrow: 1,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    borderRadius: THEME.radius.sm,
+    padding: 10,
+  },
+  accountLabel: {
+    color: THEME.colors.muted,
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  accountValue: {
+    marginTop: 4,
+    color: THEME.colors.text,
+    fontWeight: '800',
+  },
+  badge: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+  },
+  badgeStudent: {
+    backgroundColor: THEME.colors.successBg,
+    borderColor: THEME.colors.border,
+  },
+  badgeStaff: {
+    backgroundColor: THEME.colors.bg,
+    borderColor: THEME.colors.border,
+  },
+  badgeText: {
+    fontWeight: '900',
+    letterSpacing: 0.8,
+    fontSize: 12,
+  },
+  badgeTextStudent: {
+    color: THEME.colors.successText,
+  },
+  badgeTextStaff: {
+    color: THEME.colors.text,
+  },
+
+  pill: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  pillNeutral: {
+    backgroundColor: THEME.colors.bg,
+  },
+  pillSuccess: {
+    backgroundColor: THEME.colors.successBg,
+  },
+  pillDanger: {
+    backgroundColor: THEME.colors.dangerBg,
+  },
+  pillText: {
+    fontWeight: '900',
+    fontSize: 11,
+    letterSpacing: 0.7,
+    color: THEME.colors.text,
   },
 
   calendarCard: {
     marginTop: 8,
     borderWidth: 1,
-    borderColor: '#e5e5e5',
-    borderRadius: 8,
+    borderColor: THEME.colors.border,
+    borderRadius: THEME.radius.md,
     padding: 10,
+    backgroundColor: THEME.colors.surface,
   },
   calendarHeaderRow: {
     flexDirection: 'row',
@@ -1056,8 +1484,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 6,
   },
+  calendarNavBtn: {
+    minWidth: 42,
+  },
   calendarTitle: {
     fontWeight: '700',
+    color: THEME.colors.text,
   },
   calendarWeekdaysRow: {
     flexDirection: 'row',
@@ -1067,7 +1499,7 @@ const styles = StyleSheet.create({
   calendarWeekday: {
     width: 38,
     textAlign: 'center',
-    color: '#666',
+    color: THEME.colors.muted,
     fontWeight: '600',
   },
   calendarWeekRow: {
@@ -1078,9 +1510,9 @@ const styles = StyleSheet.create({
   calendarDay: {
     width: 38,
     height: 32,
-    borderRadius: 6,
+    borderRadius: THEME.radius.sm,
     borderWidth: 1,
-    borderColor: '#e5e5e5',
+    borderColor: THEME.colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1089,13 +1521,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   calendarDayAvailable: {
-    backgroundColor: '#e6f7e6',
+    backgroundColor: THEME.colors.successBg,
   },
   calendarDayFull: {
-    backgroundColor: '#fdecea',
+    backgroundColor: THEME.colors.dangerBg,
   },
   calendarDaySelected: {
-    borderColor: '#444',
+    borderColor: THEME.colors.text,
     borderWidth: 2,
   },
   calendarDayPressed: {
@@ -1106,13 +1538,14 @@ const styles = StyleSheet.create({
   },
   calendarDayText: {
     fontWeight: '700',
+    color: THEME.colors.text,
   },
   calendarDayWeekend: {
     backgroundColor: 'transparent',
   },
   calendarDayWeekendText: {
     fontWeight: '700',
-    color: '#666',
+    color: THEME.colors.muted,
   },
   calendarLegendRow: {
     flexDirection: 'row',
@@ -1122,17 +1555,20 @@ const styles = StyleSheet.create({
   legendChip: {
     flex: 1,
     paddingVertical: 6,
-    borderRadius: 6,
+    borderRadius: THEME.radius.sm,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
   },
   legendAvailable: {
-    backgroundColor: '#e6f7e6',
+    backgroundColor: THEME.colors.successBg,
     marginRight: 8,
   },
   legendFull: {
-    backgroundColor: '#fdecea',
+    backgroundColor: THEME.colors.dangerBg,
   },
   legendText: {
     fontWeight: '700',
+    color: THEME.colors.text,
   },
 });
