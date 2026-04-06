@@ -197,6 +197,7 @@ export default function App() {
     (typeof process !== 'undefined' && process?.env?.EXPO_PUBLIC_DAILY_CAPACITY) ||
       10,
   );
+  const HOURLY_CAPACITY = 5;
 
   const [calendarCursor, setCalendarCursor] = useState(() => {
     const d = new Date();
@@ -237,6 +238,20 @@ export default function App() {
     });
   }, [appointments]);
 
+  const confirmedCountByYmdHour = useMemo(() => {
+    // Keyed by "YYYY-MM-DD HH:MM" (UTC)
+    const map = new Map();
+    for (const appt of staffConfirmedAppointments || []) {
+      const iso = typeof appt?.scheduled_for === 'string' ? appt.scheduled_for : '';
+      if (!iso || iso.length < 16) continue;
+      const ymd = iso.slice(0, 10);
+      const hhmm = iso.slice(11, 16);
+      const key = `${ymd} ${hhmm}`;
+      map.set(key, (map.get(key) || 0) + 1);
+    }
+    return map;
+  }, [staffConfirmedAppointments]);
+
   const staffInboxAppointments = useMemo(() => {
     // Staff "Appointments" view acts like an inbox: pending/cancelled only.
     // Confirmed appointments move to the calendar view.
@@ -267,6 +282,21 @@ export default function App() {
   }, [staffConfirmedAppointments, selectedDateYmd]);
 
   const staffConfirmedAppointmentsForSelectedDate = staffAppointmentsForSelectedDate;
+
+  const selectedHourSlotsLeft = useMemo(() => {
+    const key = `${selectedDateYmd} ${selectedTime}`;
+    const used = confirmedCountByYmdHour.get(key) || 0;
+    return Math.max(0, HOURLY_CAPACITY - used);
+  }, [confirmedCountByYmdHour, selectedDateYmd, selectedTime, HOURLY_CAPACITY]);
+
+  function slotsLeftForIso(iso) {
+    if (!iso || typeof iso !== 'string' || iso.length < 16) return HOURLY_CAPACITY;
+    const ymd = iso.slice(0, 10);
+    const hhmm = iso.slice(11, 16);
+    const key = `${ymd} ${hhmm}`;
+    const used = confirmedCountByYmdHour.get(key) || 0;
+    return Math.max(0, HOURLY_CAPACITY - used);
+  }
 
   const earliestAvailableYmd = useMemo(() => {
     const start = new Date();
@@ -814,6 +844,9 @@ export default function App() {
                           : ''}
                       </Text>
                       <Text style={styles.itemMeta}>{item.scheduled_for}</Text>
+                      <Text style={styles.hint}>
+                        Slots left this hour: {slotsLeftForIso(item.scheduled_for)}/{HOURLY_CAPACITY}
+                      </Text>
 
                       {(() => {
                         const dec = decryptedById.get(item.id);
@@ -858,7 +891,7 @@ export default function App() {
                                 <UiButton
                                   title="Confirm"
                                   onPress={() => setAppointmentStatus(item.id, 'confirmed')}
-                                  disabled={busy}
+                                  disabled={busy || slotsLeftForIso(item.scheduled_for) <= 0}
                                   variant="primary"
                                 />
                               </View>
@@ -915,6 +948,23 @@ export default function App() {
                 <Text style={styles.hint}>
                   Selected: {selectedDateYmd} {selectedTime}
                 </Text>
+                <Text style={styles.hint}>
+                  Available this hour: {selectedHourSlotsLeft}/{HOURLY_CAPACITY}
+                </Text>
+
+                <View style={styles.availabilityList}>
+                  {timeOptions.map((opt) => {
+                    const key = `${selectedDateYmd} ${opt.value}`;
+                    const used = confirmedCountByYmdHour.get(key) || 0;
+                    const left = Math.max(0, HOURLY_CAPACITY - used);
+                    return (
+                      <View key={opt.value} style={styles.availabilityRow}>
+                        <Text style={styles.availabilityTime}>{opt.value}</Text>
+                        <Text style={styles.availabilityMeta}>{left}/{HOURLY_CAPACITY} available</Text>
+                      </View>
+                    );
+                  })}
+                </View>
 
                 <Text style={[styles.sectionTitle, { marginTop: 12 }]}>
                   Appointments on {selectedDateYmd}
@@ -1566,6 +1616,32 @@ const styles = StyleSheet.create({
     marginTop: 4,
     flexShrink: 1,
     color: THEME.colors.text,
+  },
+  availabilityList: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    borderRadius: THEME.radius.sm,
+    overflow: 'hidden',
+    backgroundColor: THEME.colors.surface,
+  },
+  availabilityRow: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderTopWidth: 1,
+    borderTopColor: THEME.colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  availabilityTime: {
+    fontWeight: '800',
+    color: THEME.colors.text,
+  },
+  availabilityMeta: {
+    color: THEME.colors.muted,
+    fontWeight: '700',
   },
   errorBox: {
     marginTop: 8,
