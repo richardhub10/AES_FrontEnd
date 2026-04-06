@@ -1201,7 +1201,20 @@ function getErrorMessage(e) {
     if (detail.toLowerCase().includes('no active account')) {
       return 'Incorrect email or password.';
     }
-    if (typeof e.response.data === 'string') return e.response.data;
+    if (typeof e.response.data === 'string') {
+      const text = e.response.data;
+      const looksLikeHtml = /<\s*!doctype\s+html|<\s*html\b/i.test(text);
+      const status = e?.response?.status;
+      if (looksLikeHtml) {
+        if (status === 404) {
+          return (
+            'API endpoint not found (404). This usually means the backend is not redeployed yet, or EXPO_PUBLIC_API_BASE_URL is pointing to the wrong server.'
+          );
+        }
+        return 'Backend returned an HTML page instead of JSON. Check the backend URL and try again.';
+      }
+      return text;
+    }
     return JSON.stringify(e.response.data);
   }
   return e?.message || 'Request failed';
