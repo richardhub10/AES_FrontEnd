@@ -693,7 +693,7 @@ export default function App() {
             <UiButton title="Logout" onPress={logout} disabled={busy} variant="ghost" />
           </View>
 
-          <AccountDetails me={me} emailFallback={email} />
+          {!showAccounts ? <AccountDetails me={me} emailFallback={email} /> : null}
 
           {!!token && !me ? (
             <View style={styles.card}>
