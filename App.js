@@ -6,6 +6,7 @@ import {
   Animated,
   Button,
   FlatList,
+  Image,
   Platform,
   Pressable,
   SafeAreaView,
@@ -20,16 +21,21 @@ const API_BASE_URL =
   (typeof process !== 'undefined' && process?.env?.EXPO_PUBLIC_API_BASE_URL) ||
   'https://aes-back.onrender.com';
 
+const UA_LOGO_URI =
+  (typeof process !== 'undefined' && process?.env?.EXPO_PUBLIC_UA_LOGO_URI) ||
+  '';
+
 const THEME = {
   colors: {
-    bg: '#f7f8fa',
+    bg: '#f5f7fb',
     surface: '#ffffff',
-    text: '#111827',
-    muted: '#6b7280',
+    text: '#0b1f3b',
+    muted: '#5b6b84',
     border: '#e5e7eb',
     borderStrong: '#d1d5db',
-    primary: '#1f2937',
+    primary: '#0b3b8c',
     primaryText: '#ffffff',
+    accent: '#f5b301',
     dangerBg: '#fdecea',
     dangerBorder: '#f5c2c0',
     dangerText: '#8a1f17',
@@ -461,8 +467,26 @@ export default function App() {
         keyboardShouldPersistTaps="handled"
       >
       <View style={styles.header}>
-        <Text style={styles.title}>University of the Assumption Clinic</Text>
-        <Text style={styles.subtitle}>Appointment System</Text>
+        <View style={styles.brandBar}>
+          <View style={styles.brandLeft}>
+            {UA_LOGO_URI ? (
+              <Image
+                source={{ uri: UA_LOGO_URI }}
+                style={styles.brandLogo}
+                resizeMode="contain"
+                accessibilityLabel="University of the Assumption logo"
+              />
+            ) : (
+              <View style={styles.brandLogoFallback}>
+                <Text style={styles.brandLogoFallbackText}>UA</Text>
+              </View>
+            )}
+            <View style={styles.brandTextWrap}>
+              <Text style={styles.title}>University of the Assumption</Text>
+              <Text style={styles.subtitle}>University Clinic • Appointment System</Text>
+            </View>
+          </View>
+        </View>
       </View>
 
       {!!error && (
@@ -1337,6 +1361,7 @@ const styles = StyleSheet.create({
   },
   btnSecondary: {
     backgroundColor: THEME.colors.surface,
+    borderColor: THEME.colors.accent,
   },
   btnGhost: {
     backgroundColor: 'transparent',
