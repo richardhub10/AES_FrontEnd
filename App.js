@@ -950,44 +950,77 @@ export default function App() {
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>Create Appointment</Text>
 
-              <Text style={styles.label}>Scheduled For</Text>
-              {!!earliestAvailableYmd && (
-                <Text style={styles.hint}>
-                  Earliest available appointment: {earliestAvailableYmd}
-                </Text>
-              )}
+              <View style={styles.sectionBlock}>
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={styles.sectionBlockTitle}>Schedule</Text>
+                  <View style={styles.selectedChip}>
+                    <Text style={styles.selectedChipText}>
+                      {selectedDateYmd} • {selectedTime} UTC
+                    </Text>
+                  </View>
+                </View>
 
-              <Calendar
-                cursor={calendarCursor}
-                onChangeCursor={setCalendarCursor}
-                selectedDateYmd={selectedDateYmd}
-                onSelectDateYmd={setSelectedDateYmd}
-                bookedCountByDate={bookedCountByDate}
-                dailyCapacity={DAILY_CAPACITY}
-              />
+                {!!earliestAvailableYmd && (
+                  <Text style={styles.hint}>
+                    Earliest available appointment: {earliestAvailableYmd}
+                  </Text>
+                )}
 
-              <Text style={styles.label}>Time (UTC)</Text>
-              <View style={styles.pickerWrap}>
-                <Picker
-                  enabled={!busy}
-                  selectedValue={selectedTime}
-                  onValueChange={(v) => setSelectedTime(String(v))}
-                  style={styles.picker}
-                >
-                  {timeOptions.map((opt) => (
-                    <Picker.Item key={opt.value} label={opt.label} value={opt.value} />
-                  ))}
-                </Picker>
+                <Calendar
+                  cursor={calendarCursor}
+                  onChangeCursor={setCalendarCursor}
+                  selectedDateYmd={selectedDateYmd}
+                  onSelectDateYmd={setSelectedDateYmd}
+                  bookedCountByDate={bookedCountByDate}
+                  dailyCapacity={DAILY_CAPACITY}
+                />
+
+                <Field label="Time (UTC)">
+                  <View style={styles.pickerWrap}>
+                    <Picker
+                      enabled={!busy}
+                      selectedValue={selectedTime}
+                      onValueChange={(v) => setSelectedTime(String(v))}
+                      style={styles.picker}
+                    >
+                      {timeOptions.map((opt) => (
+                        <Picker.Item key={opt.value} label={opt.label} value={opt.value} />
+                      ))}
+                    </Picker>
+                  </View>
+                  <Text style={styles.hint}>Selected: {selectedDateYmd} {selectedTime}</Text>
+                </Field>
               </View>
-              <Text style={styles.hint}>
-                Selected: {selectedDateYmd} {selectedTime}
-              </Text>
 
-              <Text style={styles.label}>Reason</Text>
-              <TextInput value={reason} onChangeText={setReason} style={styles.input} />
+              <View style={styles.sectionBlock}>
+                <Text style={styles.sectionBlockTitle}>Details</Text>
 
-              <Text style={styles.label}>Notes</Text>
-              <TextInput value={notes} onChangeText={setNotes} style={styles.input} />
+                <Field label="Reason" hint="Visible only after decrypt (owner/staff).">
+                  <TextInput
+                    value={reason}
+                    onChangeText={setReason}
+                    style={[styles.input, styles.textarea]}
+                    multiline
+                    numberOfLines={3}
+                    textAlignVertical="top"
+                    placeholder="Enter reason for visit"
+                    placeholderTextColor={THEME.colors.muted}
+                  />
+                </Field>
+
+                <Field label="Notes" hint="Optional additional information.">
+                  <TextInput
+                    value={notes}
+                    onChangeText={setNotes}
+                    style={[styles.input, styles.textarea]}
+                    multiline
+                    numberOfLines={4}
+                    textAlignVertical="top"
+                    placeholder="Enter notes (optional)"
+                    placeholderTextColor={THEME.colors.muted}
+                  />
+                </Field>
+              </View>
 
               <UiButton
                 title="Create"
@@ -1308,6 +1341,45 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: THEME.colors.text,
   },
+  sectionBlock: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    borderRadius: THEME.radius.md,
+    padding: 12,
+    backgroundColor: THEME.colors.surface,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  sectionBlockTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 0.2,
+    color: THEME.colors.text,
+  },
+  selectedChip: {
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: THEME.colors.bg,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  selectedChipText: {
+    fontWeight: '900',
+    color: THEME.colors.text,
+    fontSize: 12,
+    letterSpacing: 0.3,
+  },
+  textarea: {
+    minHeight: 86,
+    paddingTop: 10,
+  },
   item: {
     borderTopWidth: 1,
     borderTopColor: THEME.colors.border,
@@ -1522,7 +1594,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   calendarWeekday: {
-    width: 38,
+    width: 40,
     textAlign: 'center',
     color: THEME.colors.muted,
     fontWeight: '600',
@@ -1533,8 +1605,8 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   calendarDay: {
-    width: 38,
-    height: 32,
+    width: 40,
+    height: 36,
     borderRadius: THEME.radius.sm,
     borderWidth: 1,
     borderColor: THEME.colors.border,
@@ -1552,7 +1624,7 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.colors.dangerBg,
   },
   calendarDaySelected: {
-    borderColor: THEME.colors.text,
+    borderColor: THEME.colors.primary,
     borderWidth: 2,
   },
   calendarDayPressed: {
