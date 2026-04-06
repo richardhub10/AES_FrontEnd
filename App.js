@@ -25,6 +25,12 @@ const UA_LOGO_URI =
   (typeof process !== 'undefined' && process?.env?.EXPO_PUBLIC_UA_LOGO_URI) ||
   '';
 
+function joinUrl(base, path) {
+  const b = String(base || '').replace(/\/+$/, '');
+  const p = String(path || '').startsWith('/') ? String(path || '') : `/${path}`;
+  return `${b}${p}`;
+}
+
 const THEME = {
   colors: {
     bg: '#f5f7fb',
@@ -631,6 +637,21 @@ export default function App() {
               disabled={busy}
               variant="primary"
             />
+            {me?.is_staff ? (
+              <UiButton
+                title="Accounts"
+                onPress={() => {
+                  const url = joinUrl(API_BASE_URL, '/admin/auth/user/');
+                  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                    return;
+                  }
+                  setError(`Open this in a browser: ${url}`);
+                }}
+                disabled={busy}
+                variant="secondary"
+              />
+            ) : null}
             <UiButton title="Logout" onPress={logout} disabled={busy} variant="ghost" />
           </View>
 
