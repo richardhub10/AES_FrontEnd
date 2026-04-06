@@ -174,6 +174,7 @@ function AccountDetails({ me, emailFallback }) {
 export default function App() {
   const [mode, setMode] = useState('login'); // 'login' | 'register'
   const [showAppointments, setShowAppointments] = useState(false);
+  const [showAccounts, setShowAccounts] = useState(false);
 
   const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
@@ -190,6 +191,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
 
   const [appointments, setAppointments] = useState([]);
+  const [accounts, setAccounts] = useState([]);
   const [decryptedById, setDecryptedById] = useState(() => new Map());
   const DAILY_CAPACITY = Number(
     (typeof process !== 'undefined' && process?.env?.EXPO_PUBLIC_DAILY_CAPACITY) ||
@@ -364,6 +366,36 @@ export default function App() {
     }
   }
 
+  async function fetchAccounts() {
+    if (!token) return;
+    if (!me?.is_staff) return;
+    setBusy(true);
+    setError('');
+    try {
+      const res = await api.get('/api/staff/users/');
+      setAccounts(Array.isArray(res.data) ? res.data : []);
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function setAccountActive(userId, isActive) {
+    if (!token) return;
+    if (!me?.is_staff) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api.patch(`/api/staff/users/${userId}/`, { is_active: !!isActive });
+      await fetchAccounts();
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function setAppointmentStatus(id, status) {
     setBusy(true);
     setError('');
@@ -450,6 +482,13 @@ export default function App() {
   }, [token]);
 
   useEffect(() => {
+    if (me?.is_staff && showAccounts) {
+      fetchAccounts();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me?.is_staff, showAccounts]);
+
+  useEffect(() => {
     // If the selected day becomes invalid (weekend or fully booked), snap to earliest weekday.
     if (!token) return;
     if (me?.is_staff) return;
@@ -463,7 +502,7 @@ export default function App() {
 
   const screenKey = !token
     ? `auth:${mode}`
-    : `app:${me?.is_staff ? 'staff' : 'student'}:${showAppointments ? 'list' : 'create'}`;
+    : `app:${me?.is_staff ? 'staff' : 'student'}:${me?.is_staff ? (showAccounts ? 'accounts' : showAppointments ? 'list' : 'create') : (showAppointments ? 'list' : 'create')}`;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -633,7 +672,10 @@ export default function App() {
             <UiButton title="Refresh" onPress={fetchAppointments} disabled={busy} variant="secondary" />
             <UiButton
               title={me?.is_staff ? (showAppointments ? 'Schedule' : 'Appointments') : (showAppointments ? 'Create' : 'My Appointments')}
-              onPress={() => setShowAppointments((v) => !v)}
+              onPress={() => {
+                setShowAccounts(false);
+                setShowAppointments((v) => !v);
+              }}
               disabled={busy}
               variant="primary"
             />
@@ -641,12 +683,8 @@ export default function App() {
               <UiButton
                 title="Accounts"
                 onPress={() => {
-                  const url = joinUrl(API_BASE_URL, '/admin/auth/user/');
-                  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                    window.open(url, '_blank', 'noopener,noreferrer');
-                    return;
-                  }
-                  setError(`Open this in a browser: ${url}`);
+                  setShowAppointments(false);
+                  setShowAccounts(true);
                 }}
                 disabled={busy}
                 variant="secondary"
@@ -662,6 +700,88 @@ export default function App() {
               <Text style={styles.hint}>Loading account…</Text>
             </View>
           ) : me?.is_staff ? (
+            showAccounts ? (
+              <View style={styles.card}>
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={styles.sectionTitle}>Registered Accounts</Text>
+                  <UiButton title="Reload" onPress={fetchAccounts} disabled={busy} variant="ghost" />
+                </View>
+
+                <FlatList
+                  data={accounts}
+                  scrollEnabled={false}
+                  keyExtractor={(item) => String(item.id)}
+                  ListEmptyComponent={<Text style={styles.hint}>No accounts found.</Text>}
+                  renderItem={({ item }) => {
+                    const isActive = !!item?.is_active;
+                    const isStaff = !!item?.is_staff;
+                    const isSelf = item?.id === me?.id;
+                    const fullName = `${item?.first_name || ''} ${item?.last_name || ''}`.trim();
+                    const subtitle = fullName || item?.email || item?.username || '—';
+                    const roleLabel = isStaff ? 'STAFF' : 'STUDENT';
+                    const statusLabel = isActive ? 'ACTIVE' : 'DISABLED';
+
+                    return (
+                      <View style={styles.item}>
+                        <View style={styles.itemHeaderRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.itemTitle}>{subtitle}</Text>
+                            <Text style={styles.itemMeta}>{item?.username || ''}</Text>
+                          </View>
+                          <View style={styles.pillsRow}>
+                            <View style={[styles.pill, styles.pillNeutral]}>
+                              <Text style={styles.pillText}>{roleLabel}</Text>
+                            </View>
+                            {isSelf ? (
+                              <View style={[styles.pill, styles.pillNeutral]}>
+                                <Text style={styles.pillText}>YOU</Text>
+                              </View>
+                            ) : null}
+                            <View
+                              style={[
+                                styles.pill,
+                                isActive ? styles.pillSuccess : styles.pillDanger,
+                              ]}
+                            >
+                              <Text style={styles.pillText}>{statusLabel}</Text>
+                            </View>
+                          </View>
+                        </View>
+
+                        <View style={styles.accountRow}>
+                          <View style={styles.accountMiniCell}>
+                            <Text style={styles.accountLabel}>School ID</Text>
+                            <Text style={styles.accountValue}>{item?.school_id || '—'}</Text>
+                          </View>
+                          <View style={styles.accountMiniCell}>
+                            <Text style={styles.accountLabel}>Contact</Text>
+                            <Text style={styles.accountValue}>{item?.contact_number || '—'}</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.actionRow}>
+                          {isActive ? (
+                            <UiButton
+                              title="Disable"
+                              onPress={() => setAccountActive(item.id, false)}
+                              disabled={busy || isSelf}
+                              variant="secondary"
+                            />
+                          ) : (
+                            <UiButton
+                              title="Enable"
+                              onPress={() => setAccountActive(item.id, true)}
+                              disabled={busy || isSelf}
+                              variant="primary"
+                            />
+                          )}
+                        </View>
+                      </View>
+                    );
+                  }}
+                />
+              </View>
+            ) : (
             showAppointments ? (
               <View style={styles.card}>
                 <Text style={styles.sectionTitle}>Appointments</Text>
@@ -884,6 +1004,7 @@ export default function App() {
                   )}
                 />
               </View>
+            )
             )
           ) : showAppointments ? (
             <View style={styles.card}>
@@ -1412,6 +1533,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 10,
   },
+  pillsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+  },
   itemTitle: {
     fontWeight: '700',
     color: THEME.colors.text,
@@ -1563,6 +1691,22 @@ const styles = StyleSheet.create({
   },
   badgeTextStaff: {
     color: THEME.colors.text,
+  },
+
+  accountRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  accountMiniCell: {
+    minWidth: 220,
+    flexGrow: 1,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    borderRadius: THEME.radius.sm,
+    padding: 10,
+    backgroundColor: THEME.colors.surface,
   },
 
   pill: {
