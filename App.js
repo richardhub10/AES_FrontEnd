@@ -289,6 +289,19 @@ export default function App() {
     return Math.max(0, HOURLY_CAPACITY - used);
   }, [confirmedCountByYmdHour, selectedDateYmd, selectedTime, HOURLY_CAPACITY]);
 
+  const timeOptionsWithAvailability = useMemo(() => {
+    return (timeOptions || []).map((opt) => {
+      const key = `${selectedDateYmd} ${opt.value}`;
+      const used = confirmedCountByYmdHour.get(key) || 0;
+      const left = Math.max(0, HOURLY_CAPACITY - used);
+      const status = left > 0 ? 'Available' : 'Not available';
+      return {
+        ...opt,
+        label: `${opt.label} — ${status}`,
+      };
+    });
+  }, [timeOptions, selectedDateYmd, confirmedCountByYmdHour, HOURLY_CAPACITY]);
+
   function slotsLeftForIso(iso) {
     if (!iso || typeof iso !== 'string' || iso.length < 16) return HOURLY_CAPACITY;
     const ymd = iso.slice(0, 10);
@@ -470,6 +483,11 @@ export default function App() {
   async function createAppointment() {
     if (me?.is_staff) {
       setError('Staff accounts cannot create appointments.');
+      return;
+    }
+
+    if (selectedHourSlotsLeft <= 0) {
+      setError('Selected time is not available. Please choose another hour.');
       return;
     }
 
@@ -940,7 +958,7 @@ export default function App() {
                     onValueChange={(v) => setSelectedTime(String(v))}
                     style={styles.picker}
                   >
-                    {timeOptions.map((opt) => (
+                    {timeOptionsWithAvailability.map((opt) => (
                       <Picker.Item key={opt.value} label={opt.label} value={opt.value} />
                     ))}
                   </Picker>
@@ -949,7 +967,7 @@ export default function App() {
                   Selected: {selectedDateYmd} {selectedTime}
                 </Text>
                 <Text style={styles.hint}>
-                  Available this hour: {selectedHourSlotsLeft}/{HOURLY_CAPACITY}
+                  Status: {selectedHourSlotsLeft > 0 ? 'Available' : 'Not available'} ({selectedHourSlotsLeft}/{HOURLY_CAPACITY} slots left)
                 </Text>
 
                 <View style={styles.availabilityList}>
@@ -957,10 +975,13 @@ export default function App() {
                     const key = `${selectedDateYmd} ${opt.value}`;
                     const used = confirmedCountByYmdHour.get(key) || 0;
                     const left = Math.max(0, HOURLY_CAPACITY - used);
+                    const statusText = left > 0 ? 'Available' : 'Not available';
                     return (
                       <View key={opt.value} style={styles.availabilityRow}>
                         <Text style={styles.availabilityTime}>{opt.value}</Text>
-                        <Text style={styles.availabilityMeta}>{left}/{HOURLY_CAPACITY} available</Text>
+                        <Text style={styles.availabilityMeta}>
+                          {statusText} ({left}/{HOURLY_CAPACITY})
+                        </Text>
                       </View>
                     );
                   })}
@@ -1175,12 +1196,15 @@ export default function App() {
                       onValueChange={(v) => setSelectedTime(String(v))}
                       style={styles.picker}
                     >
-                      {timeOptions.map((opt) => (
+                      {timeOptionsWithAvailability.map((opt) => (
                         <Picker.Item key={opt.value} label={opt.label} value={opt.value} />
                       ))}
                     </Picker>
                   </View>
                   <Text style={styles.hint}>Selected: {selectedDateYmd} {selectedTime}</Text>
+                  <Text style={styles.hint}>
+                    Status: {selectedHourSlotsLeft > 0 ? 'Available' : 'Not available'} ({selectedHourSlotsLeft}/{HOURLY_CAPACITY} slots left)
+                  </Text>
                 </Field>
               </View>
 
@@ -1217,7 +1241,7 @@ export default function App() {
               <UiButton
                 title="Create"
                 onPress={createAppointment}
-                disabled={busy || !scheduledForIso || isWeekendYmd(selectedDateYmd)}
+                disabled={busy || !scheduledForIso || isWeekendYmd(selectedDateYmd) || selectedHourSlotsLeft <= 0}
                 variant="primary"
               />
             </View>
