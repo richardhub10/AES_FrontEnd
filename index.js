@@ -1,3 +1,11 @@
+/**
+ * Entry point for the Expo/React Native app.
+ *
+ * This file is intentionally small:
+ * - Imports the root `App` component
+ * - Registers it with Expo so it runs in Expo Go and in a native build
+ */
+
 import { registerRootComponent } from 'expo';
 
 import App from './App';

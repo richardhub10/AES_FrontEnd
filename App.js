@@ -1,3 +1,23 @@
+/**
+ * UA Clinic Appointment System (Frontend)
+ *
+ * What this file contains:
+ * - UI for Login + Registration (student/patient accounts)
+ * - UI for creating appointments (student)
+ * - UI for reviewing/confirming/cancelling appointments (staff)
+ * - Calls to the Django/DRF backend (JWT auth)
+ * - "Decrypt" flow:
+ *   Backend returns AES-encrypted `reason`/`notes` by default.
+ *   A special endpoint `/api/appointments/{id}/decrypt/` returns plaintext
+ *   for the owner or staff so the user can read it and generate a ticket.
+ * - PDF "Ticket" generation using `jsPDF` (works on web; on native devices
+ *   PDF download behavior depends on platform/permissions)
+ *
+ * Key env vars:
+ * - EXPO_PUBLIC_API_BASE_URL: backend base URL (Render)
+ * - EXPO_PUBLIC_UA_LOGO_URI: optional logo URL for the header
+ */
+
 import axios from 'axios';
 import { StatusBar } from 'expo-status-bar';
 import { jsPDF } from 'jspdf';
@@ -19,14 +39,17 @@ import {
 } from 'react-native';
 
 const API_BASE_URL =
+  // Expo supports "public" env vars that can be embedded at build time.
   (typeof process !== 'undefined' && process?.env?.EXPO_PUBLIC_API_BASE_URL) ||
   'https://aes-backend-ggxi.onrender.com';
 
 const UA_LOGO_URI =
+  // Optional UA logo shown in the app header.
   (typeof process !== 'undefined' && process?.env?.EXPO_PUBLIC_UA_LOGO_URI) ||
   '';
 
 function joinUrl(base, path) {
+  // Simple URL join helper (avoids accidental double slashes).
   const b = String(base || '').replace(/\/+$/, '');
   const p = String(path || '').startsWith('/') ? String(path || '') : `/${path}`;
   return `${b}${p}`;
@@ -34,8 +57,8 @@ function joinUrl(base, path) {
 
 function formatIsoForSticker(iso) {
   if (!iso || typeof iso !== 'string') return '—';
-  // Keep it simple and consistent with backend: show UTC.
-  // Example: 2026-04-07T07:00:00Z -> 2026-04-07 07:00 UTC
+  // Keep it simple and consistent with the backend: show UTC.
+  // Example: "2026-04-07T07:00:00Z" -> "2026-04-07 07:00 UTC"
   const ymd = iso.slice(0, 10);
   const hhmm = iso.length >= 16 ? iso.slice(11, 16) : '';
   if (!ymd || !hhmm) return iso;
@@ -43,6 +66,7 @@ function formatIsoForSticker(iso) {
 }
 
 function hexToRgb(hex) {
+  // jsPDF expects RGB components for some APIs; our theme uses hex colors.
   const h = String(hex || '').replace('#', '').trim();
   if (h.length !== 6) return { r: 0, g: 0, b: 0 };
   const r = parseInt(h.slice(0, 2), 16);
@@ -63,6 +87,8 @@ function downloadAppointmentStickerPdf({
   appointmentId,
   generatedAtIso,
 }) {
+  // Generate an A4 PDF with a UA-branded ticket layout.
+  // This runs fully client-side; no server-side PDF generation is required.
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
 
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -113,6 +139,7 @@ function downloadAppointmentStickerPdf({
   let y = boxY + 96;
 
   function row(label, value) {
+    // Helper to render a label/value row and automatically wrap long values.
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(muted.r, muted.g, muted.b);
@@ -287,6 +314,7 @@ function AccountDetails({ me, emailFallback }) {
 }
 
 export default function App() {
+  // --- Auth/UI mode state -------------------------------------------------
   const [mode, setMode] = useState('login'); // 'login' | 'register'
   const [showAppointments, setShowAppointments] = useState(false);
   const [showAccounts, setShowAccounts] = useState(false);
@@ -307,6 +335,10 @@ export default function App() {
 
   const [appointments, setAppointments] = useState([]);
   const [accounts, setAccounts] = useState([]);
+
+  // Map<appointmentId, {reason, notes}> holding plaintext after decrypt calls.
+  // We keep this separate from `appointments` so the list can safely display
+  // encrypted text by default.
   const [decryptedById, setDecryptedById] = useState(() => new Map());
   const DAILY_CAPACITY = Number(
     (typeof process !== 'undefined' && process?.env?.EXPO_PUBLIC_DAILY_CAPACITY) ||
@@ -444,6 +476,8 @@ export default function App() {
   }, [bookedCountByDate, DAILY_CAPACITY]);
 
   const api = useMemo(() => {
+    // Axios instance for the backend API.
+    // We attach the JWT access token (if present) to every request.
     const instance = axios.create({
       baseURL: API_BASE_URL,
       timeout: 60000,
@@ -460,6 +494,7 @@ export default function App() {
   }, [token]);
 
   async function onRegister() {
+    // Create a new user account (patient/student).
     setBusy(true);
     setError('');
     try {
@@ -482,6 +517,7 @@ export default function App() {
   }
 
   async function onLogin() {
+    // Obtain JWT access token from backend.
     setBusy(true);
     setError('');
     try {
@@ -499,6 +535,7 @@ export default function App() {
   }
 
   async function fetchMe() {
+    // Fetch the current user's profile/role.
     if (!token) return;
     try {
       const res = await api.get('/api/auth/me/');
@@ -511,6 +548,8 @@ export default function App() {
   }
 
   async function fetchAppointments() {
+    // Staff: gets all appointments.
+    // Student: gets only their own appointments.
     if (!token) return;
     setBusy(true);
     setError('');
@@ -525,6 +564,7 @@ export default function App() {
   }
 
   async function fetchAccounts() {
+    // Staff-only: list all registered accounts to enable/disable logins.
     if (!token) return;
     if (!me?.is_staff) return;
     setBusy(true);
@@ -555,6 +595,8 @@ export default function App() {
   }
 
   async function setAppointmentStatus(id, status) {
+    // Staff can confirm/cancel.
+    // Students can only cancel (backend enforces this).
     setBusy(true);
     setError('');
     try {
@@ -568,6 +610,8 @@ export default function App() {
   }
 
   async function decryptAppointment(id) {
+    // Calls a special endpoint that returns plaintext reason/notes.
+    // The backend checks permissions (owner or staff) before returning plaintext.
     setBusy(true);
     setError('');
     try {
@@ -588,6 +632,8 @@ export default function App() {
   }
 
   async function downloadStickerForAppointment(appt) {
+    // Generates the PDF ticket for a confirmed appointment.
+    // We prefer plaintext from the decrypt endpoint so the PDF shows readable text.
     if (!appt?.id) return;
 
     // Prefer plaintext (decrypt endpoint). If it fails, fall back to whatever we have.
@@ -1431,6 +1477,7 @@ export default function App() {
 }
 
 function getErrorMessage(e) {
+  // Converts Axios/HTTP errors into user-friendly messages.
   // Axios timeout errors (common with Render free-tier cold starts)
   if (e?.code === 'ECONNABORTED' || String(e?.message || '').toLowerCase().includes('timeout')) {
     return 'Backend did not respond in time. If the backend is on Render, wait 30–60 seconds and try again.';
@@ -1484,6 +1531,7 @@ function Calendar({
   const weeks = useMemo(() => buildCalendarWeeksUtc(year, month), [year, month]);
 
   function prevMonth() {
+    // Move calendar cursor back one month.
     const d = new Date(cursor);
     d.setUTCMonth(d.getUTCMonth() - 1);
     d.setUTCDate(1);
@@ -1491,6 +1539,7 @@ function Calendar({
   }
 
   function nextMonth() {
+    // Move calendar cursor forward one month.
     const d = new Date(cursor);
     d.setUTCMonth(d.getUTCMonth() + 1);
     d.setUTCDate(1);
@@ -1576,6 +1625,7 @@ function Calendar({
 }
 
 function isWeekendYmd(ymd) {
+  // Helper used by both student and staff scheduling views.
   // Sunday = 0, Saturday = 6
   const d = new Date(`${ymd}T00:00:00Z`);
   const dow = d.getUTCDay();
